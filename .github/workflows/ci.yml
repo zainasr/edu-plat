@@ -11,4 +11,12 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: services/api/go.mod
+      - name: Install pinned tools
+        run: |
+          make tools
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: Generated code is up to date
+        run: |
+          make gen
+          git diff --exit-code -- services/api/internal/api/gen
       - run: make check
