@@ -1,0 +1,15 @@
+# 01 Answers (edit freely)
+
+1: [accepted] IN (full): students, admission (enquiry + enrol), families, staff, attendance (student + staff), fees and challans, collection, expenses, simple accounting reports, announcements/notifications, parent app, teacher app, student app (lite), analytics dashboard (basic), student improvement (rule-based hints v1). SIMPLIFIED: timetable (manual grid), exams (term, marks entry, results, report card), behaviour, ID cards, resources/diary. DEFERRED: paper/test maker, full double-entry UI (engine in background), fixed assets, budgets, bridge/trend reports, colleges/universities, transport/library modules, ML models beyond rules. 
+2: [accepted] Private schools with 150-1,500 students (ideal 200-800) first; academies in the same release only where the structure fits (flat batches/courses map to class+section, so add a "batch/course" label). Optimise for the owner and the front-desk fee workflow.
+3: [ACCEPTED] Pilot with 5-10 friendly institutions (including the reference school's network if allowed) for 8-12 weeks, then open sign-ups in Lahore/Punjab, then nationwide.
+4: [ACCEPTED] Brand/product name will be designed later; use a working codename and keep the name configurable (no hard-coded brand in code or templates).
+5: [nice] Owner: "see your whole school's money and attendance in one glance and get paid on time." Teacher: "mark attendance and marks in under a minute." Parent: "know how my child is doing today and pay fees from my phone." Student: "see my progress and what to practice next."
+6: [accepted] (1) fee recovery and defaulters, (2) paper registers and manual attendance, (3) parents not informed, (4) owner has no clear numbers, (5) staff work duplicated on Excel/WhatsApp. 6: toil of schools work than can be track and managed with the modern age of software engineering.
+7: [ACCEPTED] Setup done in <= 3 days; 70% of parents active monthly; on-time fee payment +15% in 3 months; trial-to-paid 25%; 90-day retention 85%; <1 support ticket per school per week after onboarding.
+8: [accepeted] 1.0: digital ID (QR), parent notifications, appreciation/behaviour sharing, weekly parent digest (template based). Later: badges/streaks, rank boards.
+9: [accepted] Yes minimal: landing page + self-serve trial signup + demo. Marketing site can be built separately and light.
+10: [accepted] OUT: live classes, recorded courses, LMS, online exams with proctoring, transport/GPS, library, hostel, inventory, e-commerce, ML models beyond rules, multi-language UI, offline-first for admin web.
+11: [can be but not should be] Yes: message templates support Urdu text (Unicode) typed by the school; UI stays English.
+12: [accepted] Teacher/staff app: attendance marking and marks entry work offline with sync. Parent/student app: cached read-only views. Admin web: online only.
+13: [accepted] Staged: 1.0 (core admin, students, attendance, fees, notifications, parent app), 1.1 (exams, results, report cards, teacher/student apps full), 1.2 (analytics + AI hints), then paper maker as 2.0.

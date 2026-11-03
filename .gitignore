@@ -1,0 +1,18 @@
+# secrets and local config
+.env
+.env.*
+!.env.example
+CLAUDE.local.md
+.claude/settings.local.json
+# build output
+bin/
+dist/
+node_modules/
+.next/
+__pycache__/
+*.test
+coverage.out
+# editors / os
+.idea/
+.vscode/
+.DS_Store

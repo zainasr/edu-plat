@@ -1,0 +1,22 @@
+openapi: 3.0.3
+info:
+  title: Education Platform API
+  version: 0.1.0
+  description: Source of truth for every capability (DEC-004). Edit this first, then the code.
+servers:
+  - url: /api/v1
+paths:
+  /healthz:
+    get:
+      operationId: getHealth
+      summary: Liveness check
+      responses:
+        "200":
+          description: Service is up
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, example: ok }
