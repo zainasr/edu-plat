@@ -21,7 +21,7 @@ Work through the steps in order. Each step ends with a **check**: a command and 
 | **sqlc** | Generates type-safe Go from SQL (`make gen`) | Yes, from the first module |
 | **goose** | Runs SQL migrations | Yes, from the first module |
 | **gopls** | Editor intelligence for Go | Yes (editor) |
-| **uv** (`uvx`) | Runs the Postgres MCP server for Claude | Yes for Claude |
+| **Docker** (again) | Runs the Postgres MCP server for Claude (image pinned by digest in `.mcp.json`) | Yes for Claude |
 | **Node 20+ and npm** | Web (Next.js) and Playwright MCP | Later for web; present now |
 | **Claude Code** | The AI engineering harness this repo is set up for | Yes |
 
@@ -71,11 +71,12 @@ psql --version
 ```
 - Note: a local PostgreSQL server on port 5432 would clash with the Docker one. Either stop the local service (`sudo systemctl stop postgresql`) or change the port in `deploy/docker-compose.yml` and `DATABASE_URL`.
 
-### 2.5 uv (for the Postgres MCP)
+### 2.5 Docker image for the Postgres MCP
+The Postgres MCP runs from the `crystaldba/postgres-mcp` image, pinned by digest in `.mcp.json`. Docker pulls it on first use, so nothing else is installed on the host.
 ```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-uv --version
+docker pull crystaldba/postgres-mcp      # optional: warm the cache
 ```
+Why not `uvx postgres-mcp`: the PyPI package with that name is a different project, and the upstream Git tags pin `pglast` versions that are not published. See ADR-0010 if we revisit.
 
 ---
 
@@ -178,7 +179,7 @@ cd services/api && go test -race ./...         # race detector (needs gcc)
 
 ## 9. Claude Code setup (for this repo)
 - Start with `claude` in the repo root. Project settings are in `.claude/settings.json`; the team's rules are in `CLAUDE.md` and `.claude/rules/`.
-- Check the MCP servers with `/mcp`. The `postgres` and `playwright` servers can time out on the first run because `uvx` and `npx` download packages. Press retry in `/mcp`. The database MCP needs `make db-up` first.
+- Check the MCP servers with `/mcp`. The `playwright` server downloads its package on first run (`npx`), and the `postgres` server starts a Docker container. Press retry in `/mcp` if either times out. The database MCP needs `make db-up` first.
 - Run `/context` to see what has loaded; `/doctor` to check the setup.
 - Your personal overrides go in `.claude/settings.local.json` and `CLAUDE.local.md` (both ignored by git).
 
