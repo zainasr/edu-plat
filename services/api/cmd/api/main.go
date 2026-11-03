@@ -11,7 +11,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/zainasr/edu-plat/services/api/internal/platform/httpx"
+	"github.com/zainasr/edu-plat/services/api/internal/api"
+	"github.com/zainasr/edu-plat/services/api/internal/api/gen"
 )
 
 func main() {
@@ -22,10 +23,10 @@ func main() {
 		addr = ":8080"
 	}
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", httpx.Health)
+	// Routes come from the generated OpenAPI handler; api.Server implements them.
+	handler := gen.HandlerFromMux(gen.NewStrictHandler(api.NewServer(), nil), http.NewServeMux())
 
-	srv := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
+	srv := &http.Server{Addr: addr, Handler: handler, ReadHeaderTimeout: 5 * time.Second}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

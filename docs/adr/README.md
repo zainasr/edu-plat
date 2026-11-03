@@ -6,11 +6,12 @@ An ADR records one significant technical choice: the context, the options, the d
 |---|---|---|
 | 0001 | Modular monolith in Go with the standard library | Accepted |
 | 0002 | Multi-tenancy with shared Postgres, tenant_id and RLS | Accepted |
-| 0003 | OpenAPI spec-first with generated server types and clients | Proposed |
+| 0003 | OpenAPI spec-first with generated server types and clients | Accepted (generator amended 2026-11-03) |
 | 0004 | Money as integer minor units with a hidden double-entry ledger | Accepted |
 | 0005 | Background jobs on a Postgres-backed queue | Proposed |
 | 0006 | Self-managed hosting on DigitalOcean (Bangalore) | Accepted |
 | 0007 | React Native apps with local database and operation outbox | Proposed |
 | 0008 | Repository designed for AI-agent-assisted development | Accepted |
+| 0009 | Migrations with goose and pinned developer tools | Accepted |
 
-Still to write when reached: token format and sessions, PDF renderer, observability stack, migration tool (goose vs atlas), Terraform layout.
+Still to write when reached: token format and sessions, PDF renderer, observability stack, Terraform layout.

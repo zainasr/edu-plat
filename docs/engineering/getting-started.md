@@ -81,15 +81,14 @@ uv --version
 
 ## 3. Install the Go developer tools
 
-Install these into `$HOME/go/bin`. Versions are pinned to a major version on purpose; check the latest releases on each project's site before you pin them in a `tools.go` file (a later decision).
+Versions are pinned in the `Makefile` (see ADR-0009), so every machine and CI run the same tools. Install them into `$HOME/go/bin` with:
 
 ```bash
-go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
-go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
-go install github.com/pressly/goose/v3/cmd/goose@latest
-go install golang.org/x/tools/gopls@latest
-go install golang.org/x/vuln/cmd/govulncheck@latest
+make tools      # golangci-lint, sqlc, goose, oapi-codegen at the pinned versions
+go install golang.org/x/tools/gopls@latest          # editor only, not pinned
 ```
+
+The pinned tools need Go 1.26 to build. If your Go is 1.23, the `go` command downloads go1.26 automatically (`GOTOOLCHAIN`). That is expected.
 
 **Checks:**
 ```bash
