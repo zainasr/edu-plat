@@ -6,6 +6,8 @@ services:
       POSTGRES_PASSWORD: app
       POSTGRES_DB: app_dev
     ports: ["5432:5432"]
-    volumes: ["pgdata:/var/lib/postgresql/data"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/roles.sql:/docker-entrypoint-initdb.d/01-roles.sql:ro
 volumes:
   pgdata:

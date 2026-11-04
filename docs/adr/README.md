@@ -14,5 +14,7 @@ An ADR records one significant technical choice: the context, the options, the d
 | 0008 | Repository designed for AI-agent-assisted development | Accepted |
 | 0009 | Migrations with goose and pinned developer tools | Accepted |
 | 0010 | Postgres MCP server runs from a pinned Docker image | Accepted |
+| 0011 | Walking-skeleton auth, tenancy and data access | Accepted |
+| 0012 | sqlc for module queries, hand-written pgx for the definer lookups | Accepted |
 
 Still to write when reached: token format and sessions, PDF renderer, observability stack, Terraform layout.
