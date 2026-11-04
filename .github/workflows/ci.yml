@@ -6,6 +6,17 @@ on:
 jobs:
   api:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+          POSTGRES_DB: app_dev
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U app -d app_dev"
+          --health-interval 5s --health-timeout 5s --health-retries 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -18,5 +29,10 @@ jobs:
       - name: Generated code is up to date
         run: |
           make gen
-          git diff --exit-code -- services/api/internal/api/gen
-      - run: make check
+          git diff --exit-code -- services/api/internal/api/gen services/api/internal/iam/store/gen services/api/internal/students/store/gen services/api/internal/platform/audit/store/gen
+      - name: Database roles and migrations
+        run: |
+          psql "postgresql://app:app@localhost:5432/app_dev" -v ON_ERROR_STOP=1 -f deploy/db/roles.sql
+          make migrate
+      - name: Checks (lint, vet, unit and integration tests)
+        run: make check
