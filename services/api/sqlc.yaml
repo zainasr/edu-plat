@@ -1,0 +1,27 @@
+version: "2"
+# One block per module (ADR-0012). Queries are named after the module; generated code is never hand-edited.
+sql:
+  - engine: postgresql
+    schema: migrations
+    queries: internal/iam/store/queries
+    gen:
+      go:
+        package: gen
+        out: internal/iam/store/gen
+        sql_package: pgx/v5
+  - engine: postgresql
+    schema: migrations
+    queries: internal/students/store/queries
+    gen:
+      go:
+        package: gen
+        out: internal/students/store/gen
+        sql_package: pgx/v5
+  - engine: postgresql
+    schema: migrations
+    queries: internal/platform/audit/store/queries
+    gen:
+      go:
+        package: gen
+        out: internal/platform/audit/store/gen
+        sql_package: pgx/v5
