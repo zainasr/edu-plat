@@ -1,17 +1,29 @@
 openapi: 3.0.3
 info:
   title: Education Platform API
-  version: 0.1.0
+  version: 0.2.0
   description: Source of truth for every capability (DEC-004). Edit this first, then the code.
-servers:
-  - url: /
 # Infrastructure endpoints (health) sit at the root for the load balancer.
 # Product endpoints carry their version in the path, for example /api/v1/students.
+servers:
+  - url: /
+
+tags:
+  - name: system
+  - name: auth
+  - name: tokens
+  - name: students
+
+security:
+  - bearerAuth: []
+
 paths:
   /healthz:
     get:
       operationId: getHealth
+      tags: [system]
       summary: Liveness check
+      security: []
       responses:
         "200":
           description: Service is up
@@ -22,3 +34,385 @@ paths:
                 required: [status]
                 properties:
                   status: { type: string, example: ok }
+
+  /api/v1/auth/otp/request:
+    post:
+      operationId: requestOtp
+      tags: [auth]
+      summary: Send a one-time code to a mobile number
+      description: Always answers 202 for a well-formed number, so the response does not reveal which numbers are registered (REQ-IAM-010).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OtpRequest" }
+      responses:
+        "202":
+          description: Code issued (if the number is known)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OtpRequested" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/auth/otp/verify:
+    post:
+      operationId: verifyOtp
+      tags: [auth]
+      summary: Exchange a one-time code for a session token in one tenant
+      description: |
+        The session belongs to one tenant (tenant_slug). The caller must be a member
+        of that tenant. Failures return the same error, so a wrong code, an unknown
+        number and a non-member look identical (US-IAM-003).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OtpVerify" }
+      responses:
+        "200":
+          description: Signed in
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Session" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/InvalidCredentials" }
+        "423": { $ref: "#/components/responses/OtpLocked" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/tokens:
+    post:
+      operationId: createToken
+      tags: [tokens]
+      summary: Create a personal access token for scripts and terminal use
+      description: The token value is returned once. Only its hash is stored (REQ-IAM-015).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TokenCreate" }
+      responses:
+        "201":
+          description: Token created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TokenCreated" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/students:
+    post:
+      operationId: createStudent
+      tags: [students]
+      summary: Enrol a student with at least one guardian
+      description: |
+        Requires `student.create`. A guardian whose mobile already exists in the
+        tenant joins that guardian's family (REQ-STU-004). Exactly one guardian is
+        `primary`; when no guardian is `fee_payer`, the primary pays (BR-STU-006).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StudentCreate" }
+      responses:
+        "201":
+          description: Student created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Student" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    get:
+      operationId: listStudents
+      tags: [students]
+      summary: List students in the caller's tenant (cursor paginated)
+      description: Requires `student.view`. Results are ordered newest first.
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: cursor
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: A page of students
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StudentPage" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/students/{studentId}:
+    get:
+      operationId: getStudent
+      tags: [students]
+      summary: Read one student with guardians
+      description: Requires `student.view`. A student outside the caller's tenant returns 404, never 403 (API conventions §3).
+      parameters:
+        - name: studentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: The student
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Student" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Session token (from verify) or personal access token (from /tokens).
+
+  responses:
+    ValidationError:
+      description: Request is malformed or breaks a rule
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    Unauthenticated:
+      description: Missing, unknown, expired or revoked token
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    InvalidCredentials:
+      description: Wrong or expired code, or the mobile is not a member of the tenant
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    OtpLocked:
+      description: Too many wrong codes; wait for the cool-down
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    Forbidden:
+      description: Token lacks the named permission
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    NotFound:
+      description: No such resource in the caller's tenant
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    InternalError:
+      description: Unexpected failure; the request_id is in the body and the logs
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  schemas:
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, request_id]
+          properties:
+            code: { type: string, example: student.not_found }
+            message: { type: string, example: Student not found. }
+            details:
+              type: array
+              items:
+                type: object
+                required: [field, message]
+                properties:
+                  field: { type: string, example: guardians }
+                  message: { type: string, example: At least one guardian is required. }
+            request_id: { type: string, example: 3f1c2a9e0b7d4c11 }
+
+    Mobile:
+      type: string
+      description: Pakistani mobile, as 03XXXXXXXXX or +923XXXXXXXXX. Stored as E.164.
+      pattern: "^(\\+92|0)3[0-9]{9}$"
+      example: "03001234567"
+
+    OtpRequest:
+      type: object
+      required: [mobile]
+      additionalProperties: false
+      properties:
+        mobile: { $ref: "#/components/schemas/Mobile" }
+
+    OtpRequested:
+      type: object
+      required: [expires_in_seconds]
+      properties:
+        expires_in_seconds: { type: integer, example: 300 }
+
+    OtpVerify:
+      type: object
+      required: [mobile, code, tenant_slug]
+      additionalProperties: false
+      properties:
+        mobile: { $ref: "#/components/schemas/Mobile" }
+        code:
+          type: string
+          pattern: "^[0-9]{6}$"
+          example: "123456"
+        tenant_slug:
+          type: string
+          pattern: "^[a-z0-9-]{3,40}$"
+          example: demo-school
+
+    Session:
+      type: object
+      required: [token, expires_at, tenant]
+      properties:
+        token:
+          type: string
+          example: edu_session_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+        expires_at: { type: string, format: date-time }
+        tenant:
+          $ref: "#/components/schemas/TenantRef"
+
+    TenantRef:
+      type: object
+      required: [id, slug]
+      properties:
+        id: { type: string, format: uuid }
+        slug: { type: string, example: demo-school }
+
+    TokenCreate:
+      type: object
+      required: [name]
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+          example: nightly-import
+        expires_in_days:
+          type: integer
+          minimum: 1
+          maximum: 365
+          default: 90
+
+    TokenCreated:
+      type: object
+      required: [id, name, token, expires_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        token:
+          type: string
+          description: Shown once. Store it now.
+          example: edu_pat_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+        expires_at: { type: string, format: date-time }
+
+    Gender:
+      type: string
+      enum: [male, female, other]
+
+    Relationship:
+      type: string
+      description: A guardian's relation to the student (REQ-STU-002).
+      enum: [father, mother, grandfather, grandmother, uncle, aunt, brother, sister, other]
+
+    GuardianAccess:
+      type: string
+      enum: [full, view_only, none]
+
+    GuardianInput:
+      type: object
+      required: [full_name, mobile, relationship, primary]
+      additionalProperties: false
+      properties:
+        full_name: { type: string, minLength: 1, maxLength: 120 }
+        mobile: { $ref: "#/components/schemas/Mobile" }
+        relationship: { $ref: "#/components/schemas/Relationship" }
+        primary: { type: boolean, description: The family login. Exactly one guardian is primary. }
+        fee_payer: { type: boolean, description: Challans are addressed to this guardian. Defaults to the primary. }
+        receives_notifications: { type: boolean, default: true }
+        emergency_contact: { type: boolean, default: false }
+        access: { $ref: "#/components/schemas/GuardianAccess", default: full }
+
+    StudentCreate:
+      type: object
+      required: [full_name, father_name, gender, date_of_birth, guardians]
+      additionalProperties: false
+      properties:
+        full_name: { type: string, minLength: 1, maxLength: 120, example: Ali Khan }
+        father_name:
+          type: string
+          minLength: 1
+          maxLength: 120
+          description: Identity field for certificates. May be "Not available". The father need not be a guardian (REQ-STU-014).
+          example: Imran Khan
+        gender: { $ref: "#/components/schemas/Gender" }
+        date_of_birth: { type: string, format: date, example: "2018-04-12" }
+        guardians:
+          type: array
+          minItems: 1
+          maxItems: 4
+          items: { $ref: "#/components/schemas/GuardianInput" }
+
+    GuardianView:
+      type: object
+      required: [guardian_id, full_name, mobile, relationship, primary, fee_payer, receives_notifications, emergency_contact, access]
+      properties:
+        guardian_id: { type: string, format: uuid }
+        full_name: { type: string }
+        mobile: { type: string }
+        relationship: { $ref: "#/components/schemas/Relationship" }
+        primary: { type: boolean }
+        fee_payer: { type: boolean }
+        receives_notifications: { type: boolean }
+        emergency_contact: { type: boolean }
+        access: { $ref: "#/components/schemas/GuardianAccess" }
+
+    Student:
+      type: object
+      required: [id, registration_no, full_name, father_name, gender, date_of_birth, status, family, guardians, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        registration_no: { type: string, example: "REG-2026-00001" }
+        full_name: { type: string }
+        father_name: { type: string }
+        gender: { $ref: "#/components/schemas/Gender" }
+        date_of_birth: { type: string, format: date }
+        status:
+          type: string
+          enum: [active]
+        family:
+          type: object
+          required: [id, number]
+          properties:
+            id: { type: string, format: uuid }
+            number: { type: string, example: "F-00001" }
+        guardians:
+          type: array
+          items: { $ref: "#/components/schemas/GuardianView" }
+        created_at: { type: string, format: date-time }
+
+    StudentPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Student" }
+        next_cursor:
+          type: string
+          nullable: true
+          description: Pass as ?cursor= to get the next page. Null on the last page.

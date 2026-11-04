@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -12,29 +13,57 @@ import (
 	"time"
 
 	"github.com/zainasr/edu-plat/services/api/internal/api"
-	"github.com/zainasr/edu-plat/services/api/internal/api/gen"
+	"github.com/zainasr/edu-plat/services/api/internal/iam"
+	"github.com/zainasr/edu-plat/services/api/internal/platform/config"
+	"github.com/zainasr/edu-plat/services/api/internal/platform/db"
+	"github.com/zainasr/edu-plat/services/api/internal/students"
 )
 
 func main() {
-	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	slog.SetDefault(logger)
 
-	addr := os.Getenv("HTTP_ADDR")
-	if addr == "" {
-		addr = ":8080"
+	if err := run(); err != nil {
+		logger.Error("startup failed", "err", err)
+		os.Exit(1)
 	}
+}
 
-	// Routes come from the generated OpenAPI handler; api.Server implements them.
-	handler := gen.HandlerFromMux(gen.NewStrictHandler(api.NewServer(), nil), http.NewServeMux())
-
-	srv := &http.Server{Addr: addr, Handler: handler, ReadHeaderTimeout: 5 * time.Second}
+func run() error {
+	cfg, err := config.Load()
+	if err != nil {
+		return fmt.Errorf("configuration: %w", err)
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	pool, err := db.Connect(ctx, cfg.DatabaseURL)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+
+	// Without a real OTP provider, the process refuses to start outside dev (ADR-0011 §4).
+	var sender iam.OTPSender
+	if cfg.IsDev() {
+		sender = iam.DevSender{}
+	} else {
+		return errors.New("no OTP provider is configured for APP_ENV=production; see DEC-009")
+	}
+
+	identity := iam.NewService(pool, sender, cfg.AuthSecret)
+	enrolment := students.NewService(pool)
+	srv := &http.Server{
+		Addr:              cfg.HTTPAddr,
+		Handler:           api.Handler(api.NewServer(identity, enrolment), identity),
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+
 	go func() {
-		log.Info("listening", "addr", addr)
+		slog.Info("listening", "addr", cfg.HTTPAddr, "env", cfg.Env)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Error("server failed", "err", err)
+			slog.Error("server failed", "err", err)
 			stop()
 		}
 	}()
@@ -43,6 +72,7 @@ func main() {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
-		log.Error("shutdown", "err", err)
+		return fmt.Errorf("shutdown: %w", err)
 	}
+	return nil
 }

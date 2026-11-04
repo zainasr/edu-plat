@@ -9,12 +9,355 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"time"
+
+	"github.com/oapi-codegen/runtime"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
+
+// Defines values for Gender.
+const (
+	GenderFemale Gender = "female"
+	GenderMale   Gender = "male"
+	GenderOther  Gender = "other"
+)
+
+// Valid indicates whether the value is a known member of the Gender enum.
+func (e Gender) Valid() bool {
+	switch e {
+	case GenderFemale:
+		return true
+	case GenderMale:
+		return true
+	case GenderOther:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GuardianAccess.
+const (
+	Full     GuardianAccess = "full"
+	None     GuardianAccess = "none"
+	ViewOnly GuardianAccess = "view_only"
+)
+
+// Valid indicates whether the value is a known member of the GuardianAccess enum.
+func (e GuardianAccess) Valid() bool {
+	switch e {
+	case Full:
+		return true
+	case None:
+		return true
+	case ViewOnly:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for Relationship.
+const (
+	RelationshipAunt        Relationship = "aunt"
+	RelationshipBrother     Relationship = "brother"
+	RelationshipFather      Relationship = "father"
+	RelationshipGrandfather Relationship = "grandfather"
+	RelationshipGrandmother Relationship = "grandmother"
+	RelationshipMother      Relationship = "mother"
+	RelationshipOther       Relationship = "other"
+	RelationshipSister      Relationship = "sister"
+	RelationshipUncle       Relationship = "uncle"
+)
+
+// Valid indicates whether the value is a known member of the Relationship enum.
+func (e Relationship) Valid() bool {
+	switch e {
+	case RelationshipAunt:
+		return true
+	case RelationshipBrother:
+		return true
+	case RelationshipFather:
+		return true
+	case RelationshipGrandfather:
+		return true
+	case RelationshipGrandmother:
+		return true
+	case RelationshipMother:
+		return true
+	case RelationshipOther:
+		return true
+	case RelationshipSister:
+		return true
+	case RelationshipUncle:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for StudentStatus.
+const (
+	Active StudentStatus = "active"
+)
+
+// Valid indicates whether the value is a known member of the StudentStatus enum.
+func (e StudentStatus) Valid() bool {
+	switch e {
+	case Active:
+		return true
+	default:
+		return false
+	}
+}
+
+// ErrorEnvelope defines model for ErrorEnvelope.
+type ErrorEnvelope struct {
+	Error struct {
+		// Code Example: student.not_found
+		Code    string `json:"code"`
+		Details *[]struct {
+			// Field Example: guardians
+			Field string `json:"field"`
+
+			// Message Example: At least one guardian is required.
+			Message string `json:"message"`
+		} `json:"details,omitempty"`
+
+		// Message Example: Student not found.
+		Message string `json:"message"`
+
+		// RequestId Example: 3f1c2a9e0b7d4c11
+		RequestId string `json:"request_id"`
+	} `json:"error"`
+}
+
+// Gender defines model for Gender.
+type Gender string
+
+// GuardianAccess defines model for GuardianAccess.
+type GuardianAccess string
+
+// GuardianInput defines model for GuardianInput.
+type GuardianInput struct {
+	Access           *GuardianAccess `json:"access,omitempty"`
+	EmergencyContact *bool           `json:"emergency_contact,omitempty"`
+
+	// FeePayer Challans are addressed to this guardian. Defaults to the primary.
+	FeePayer *bool  `json:"fee_payer,omitempty"`
+	FullName string `json:"full_name"`
+
+	// Mobile Pakistani mobile, as 03XXXXXXXXX or +923XXXXXXXXX. Stored as E.164.
+	//
+	// Example: 03001234567
+	Mobile Mobile `json:"mobile"`
+
+	// Primary The family login. Exactly one guardian is primary.
+	Primary               bool  `json:"primary"`
+	ReceivesNotifications *bool `json:"receives_notifications,omitempty"`
+
+	// Relationship A guardian's relation to the student (REQ-STU-002).
+	Relationship Relationship `json:"relationship"`
+}
+
+// GuardianView defines model for GuardianView.
+type GuardianView struct {
+	Access                GuardianAccess     `json:"access"`
+	EmergencyContact      bool               `json:"emergency_contact"`
+	FeePayer              bool               `json:"fee_payer"`
+	FullName              string             `json:"full_name"`
+	GuardianId            openapi_types.UUID `json:"guardian_id"`
+	Mobile                string             `json:"mobile"`
+	Primary               bool               `json:"primary"`
+	ReceivesNotifications bool               `json:"receives_notifications"`
+
+	// Relationship A guardian's relation to the student (REQ-STU-002).
+	Relationship Relationship `json:"relationship"`
+}
+
+// Mobile Pakistani mobile, as 03XXXXXXXXX or +923XXXXXXXXX. Stored as E.164.
+//
+// Example: 03001234567
+type Mobile = string
+
+// OtpRequest defines model for OtpRequest.
+type OtpRequest struct {
+	// Mobile Pakistani mobile, as 03XXXXXXXXX or +923XXXXXXXXX. Stored as E.164.
+	//
+	// Example: 03001234567
+	Mobile Mobile `json:"mobile"`
+}
+
+// OtpRequested defines model for OtpRequested.
+type OtpRequested struct {
+	// ExpiresInSeconds Example: 300
+	ExpiresInSeconds int `json:"expires_in_seconds"`
+}
+
+// OtpVerify defines model for OtpVerify.
+type OtpVerify struct {
+	// Code Example: 123456
+	Code string `json:"code"`
+
+	// Mobile Pakistani mobile, as 03XXXXXXXXX or +923XXXXXXXXX. Stored as E.164.
+	//
+	// Example: 03001234567
+	Mobile Mobile `json:"mobile"`
+
+	// TenantSlug Example: demo-school
+	TenantSlug string `json:"tenant_slug"`
+}
+
+// Relationship A guardian's relation to the student (REQ-STU-002).
+type Relationship string
+
+// Session defines model for Session.
+type Session struct {
+	ExpiresAt time.Time `json:"expires_at"`
+	Tenant    TenantRef `json:"tenant"`
+
+	// Token Example: edu_session_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+	Token string `json:"token"`
+}
+
+// Student defines model for Student.
+type Student struct {
+	CreatedAt   time.Time          `json:"created_at"`
+	DateOfBirth openapi_types.Date `json:"date_of_birth"`
+	Family      struct {
+		Id openapi_types.UUID `json:"id"`
+
+		// Number Example: F-00001
+		Number string `json:"number"`
+	} `json:"family"`
+	FatherName string             `json:"father_name"`
+	FullName   string             `json:"full_name"`
+	Gender     Gender             `json:"gender"`
+	Guardians  []GuardianView     `json:"guardians"`
+	Id         openapi_types.UUID `json:"id"`
+
+	// RegistrationNo Example: REG-2026-00001
+	RegistrationNo string        `json:"registration_no"`
+	Status         StudentStatus `json:"status"`
+}
+
+// StudentStatus defines model for Student.Status.
+type StudentStatus string
+
+// StudentCreate defines model for StudentCreate.
+type StudentCreate struct {
+	// DateOfBirth Example: 2018-04-12
+	DateOfBirth openapi_types.Date `json:"date_of_birth"`
+
+	// FatherName Identity field for certificates. May be "Not available". The father need not be a guardian (REQ-STU-014).
+	//
+	// Example: Imran Khan
+	FatherName string `json:"father_name"`
+
+	// FullName Example: Ali Khan
+	FullName  string          `json:"full_name"`
+	Gender    Gender          `json:"gender"`
+	Guardians []GuardianInput `json:"guardians"`
+}
+
+// StudentPage defines model for StudentPage.
+type StudentPage struct {
+	Items []Student `json:"items"`
+
+	// NextCursor Pass as ?cursor= to get the next page. Null on the last page.
+	NextCursor *string `json:"next_cursor,omitempty"`
+}
+
+// TenantRef defines model for TenantRef.
+type TenantRef struct {
+	Id openapi_types.UUID `json:"id"`
+
+	// Slug Example: demo-school
+	Slug string `json:"slug"`
+}
+
+// TokenCreate defines model for TokenCreate.
+type TokenCreate struct {
+	ExpiresInDays *int `json:"expires_in_days,omitempty"`
+
+	// Name Example: nightly-import
+	Name string `json:"name"`
+}
+
+// TokenCreated defines model for TokenCreated.
+type TokenCreated struct {
+	ExpiresAt time.Time          `json:"expires_at"`
+	Id        openapi_types.UUID `json:"id"`
+	Name      string             `json:"name"`
+
+	// Token Shown once. Store it now.
+	//
+	// Example: edu_pat_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+	Token string `json:"token"`
+}
+
+// Forbidden defines model for Forbidden.
+type Forbidden = ErrorEnvelope
+
+// InternalError defines model for InternalError.
+type InternalError = ErrorEnvelope
+
+// InvalidCredentials defines model for InvalidCredentials.
+type InvalidCredentials = ErrorEnvelope
+
+// NotFound defines model for NotFound.
+type NotFound = ErrorEnvelope
+
+// OtpLocked defines model for OtpLocked.
+type OtpLocked = ErrorEnvelope
+
+// Unauthenticated defines model for Unauthenticated.
+type Unauthenticated = ErrorEnvelope
+
+// ValidationError defines model for ValidationError.
+type ValidationError = ErrorEnvelope
+
+// ListStudentsParams defines parameters for ListStudents.
+type ListStudentsParams struct {
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// RequestOtpJSONRequestBody defines body for RequestOtp for application/json ContentType.
+type RequestOtpJSONRequestBody = OtpRequest
+
+// VerifyOtpJSONRequestBody defines body for VerifyOtp for application/json ContentType.
+type VerifyOtpJSONRequestBody = OtpVerify
+
+// CreateStudentJSONRequestBody defines body for CreateStudent for application/json ContentType.
+type CreateStudentJSONRequestBody = StudentCreate
+
+// CreateTokenJSONRequestBody defines body for CreateToken for application/json ContentType.
+type CreateTokenJSONRequestBody = TokenCreate
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// RequestOtp Send a one-time code to a mobile number
+	// (POST /api/v1/auth/otp/request)
+	RequestOtp(w http.ResponseWriter, r *http.Request)
+	// VerifyOtp Exchange a one-time code for a session token in one tenant
+	// (POST /api/v1/auth/otp/verify)
+	VerifyOtp(w http.ResponseWriter, r *http.Request)
+	// ListStudents List students in the caller's tenant (cursor paginated)
+	// (GET /api/v1/students)
+	ListStudents(w http.ResponseWriter, r *http.Request, params ListStudentsParams)
+	// CreateStudent Enrol a student with at least one guardian
+	// (POST /api/v1/students)
+	CreateStudent(w http.ResponseWriter, r *http.Request)
+	// GetStudent Read one student with guardians
+	// (GET /api/v1/students/{studentId})
+	GetStudent(w http.ResponseWriter, r *http.Request, studentId openapi_types.UUID)
+	// CreateToken Create a personal access token for scripts and terminal use
+	// (POST /api/v1/tokens)
+	CreateToken(w http.ResponseWriter, r *http.Request)
 	// GetHealth Liveness check
 	// (GET /healthz)
 	GetHealth(w http.ResponseWriter, r *http.Request)
@@ -28,6 +371,134 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// RequestOtp operation middleware
+func (siw *ServerInterfaceWrapper) RequestOtp(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RequestOtp(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// VerifyOtp operation middleware
+func (siw *ServerInterfaceWrapper) VerifyOtp(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.VerifyOtp(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListStudents operation middleware
+func (siw *ServerInterfaceWrapper) ListStudents(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListStudentsParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListStudents(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateStudent operation middleware
+func (siw *ServerInterfaceWrapper) CreateStudent(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateStudent(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetStudent operation middleware
+func (siw *ServerInterfaceWrapper) GetStudent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "studentId" -------------
+	var studentId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "studentId", r.PathValue("studentId"), &studentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "studentId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetStudent(w, r, studentId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateToken operation middleware
+func (siw *ServerInterfaceWrapper) CreateToken(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateToken(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // GetHealth operation middleware
 func (siw *ServerInterfaceWrapper) GetHealth(w http.ResponseWriter, r *http.Request) {
@@ -164,8 +635,468 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	}
 
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/healthz", wrapper.GetHealth)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/auth/otp/request", wrapper.RequestOtp)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/auth/otp/verify", wrapper.VerifyOtp)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/tokens", wrapper.CreateToken)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/students", wrapper.ListStudents)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/students", wrapper.CreateStudent)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/students/{studentId}", wrapper.GetStudent)
 
 	return m
+}
+
+type ForbiddenJSONResponse ErrorEnvelope
+
+type InternalErrorJSONResponse ErrorEnvelope
+
+type InvalidCredentialsJSONResponse ErrorEnvelope
+
+type NotFoundJSONResponse ErrorEnvelope
+
+type OtpLockedJSONResponse ErrorEnvelope
+
+type UnauthenticatedJSONResponse ErrorEnvelope
+
+type ValidationErrorJSONResponse ErrorEnvelope
+
+type RequestOtpRequestObject struct {
+	Body *RequestOtpJSONRequestBody
+}
+
+type RequestOtpResponseObject interface {
+	VisitRequestOtpResponse(w http.ResponseWriter) error
+}
+
+type RequestOtp202JSONResponse OtpRequested
+
+func (response RequestOtp202JSONResponse) VisitRequestOtpResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RequestOtp400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response RequestOtp400JSONResponse) VisitRequestOtpResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RequestOtp500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response RequestOtp500JSONResponse) VisitRequestOtpResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type VerifyOtpRequestObject struct {
+	Body *VerifyOtpJSONRequestBody
+}
+
+type VerifyOtpResponseObject interface {
+	VisitVerifyOtpResponse(w http.ResponseWriter) error
+}
+
+type VerifyOtp200JSONResponse Session
+
+func (response VerifyOtp200JSONResponse) VisitVerifyOtpResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type VerifyOtp400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response VerifyOtp400JSONResponse) VisitVerifyOtpResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type VerifyOtp401JSONResponse struct{ InvalidCredentialsJSONResponse }
+
+func (response VerifyOtp401JSONResponse) VisitVerifyOtpResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type VerifyOtp423JSONResponse struct{ OtpLockedJSONResponse }
+
+func (response VerifyOtp423JSONResponse) VisitVerifyOtpResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(423)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type VerifyOtp500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response VerifyOtp500JSONResponse) VisitVerifyOtpResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListStudentsRequestObject struct {
+	Params ListStudentsParams
+}
+
+type ListStudentsResponseObject interface {
+	VisitListStudentsResponse(w http.ResponseWriter) error
+}
+
+type ListStudents200JSONResponse StudentPage
+
+func (response ListStudents200JSONResponse) VisitListStudentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListStudents400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response ListStudents400JSONResponse) VisitListStudentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListStudents401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ListStudents401JSONResponse) VisitListStudentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListStudents403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListStudents403JSONResponse) VisitListStudentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListStudents500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListStudents500JSONResponse) VisitListStudentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateStudentRequestObject struct {
+	Body *CreateStudentJSONRequestBody
+}
+
+type CreateStudentResponseObject interface {
+	VisitCreateStudentResponse(w http.ResponseWriter) error
+}
+
+type CreateStudent201JSONResponse Student
+
+func (response CreateStudent201JSONResponse) VisitCreateStudentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateStudent400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response CreateStudent400JSONResponse) VisitCreateStudentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateStudent401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response CreateStudent401JSONResponse) VisitCreateStudentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateStudent403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateStudent403JSONResponse) VisitCreateStudentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateStudent500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response CreateStudent500JSONResponse) VisitCreateStudentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetStudentRequestObject struct {
+	StudentId openapi_types.UUID `json:"studentId"`
+}
+
+type GetStudentResponseObject interface {
+	VisitGetStudentResponse(w http.ResponseWriter) error
+}
+
+type GetStudent200JSONResponse Student
+
+func (response GetStudent200JSONResponse) VisitGetStudentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetStudent401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response GetStudent401JSONResponse) VisitGetStudentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetStudent403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetStudent403JSONResponse) VisitGetStudentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetStudent404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetStudent404JSONResponse) VisitGetStudentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetStudent500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GetStudent500JSONResponse) VisitGetStudentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateTokenRequestObject struct {
+	Body *CreateTokenJSONRequestBody
+}
+
+type CreateTokenResponseObject interface {
+	VisitCreateTokenResponse(w http.ResponseWriter) error
+}
+
+type CreateToken201JSONResponse TokenCreated
+
+func (response CreateToken201JSONResponse) VisitCreateTokenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateToken400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response CreateToken400JSONResponse) VisitCreateTokenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateToken401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response CreateToken401JSONResponse) VisitCreateTokenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateToken403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateToken403JSONResponse) VisitCreateTokenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateToken500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response CreateToken500JSONResponse) VisitCreateTokenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
 }
 
 type GetHealthRequestObject struct {
@@ -194,6 +1125,24 @@ func (response GetHealth200JSONResponse) VisitGetHealthResponse(w http.ResponseW
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// RequestOtp Send a one-time code to a mobile number
+	// (POST /api/v1/auth/otp/request)
+	RequestOtp(ctx context.Context, request RequestOtpRequestObject) (RequestOtpResponseObject, error)
+	// VerifyOtp Exchange a one-time code for a session token in one tenant
+	// (POST /api/v1/auth/otp/verify)
+	VerifyOtp(ctx context.Context, request VerifyOtpRequestObject) (VerifyOtpResponseObject, error)
+	// ListStudents List students in the caller's tenant (cursor paginated)
+	// (GET /api/v1/students)
+	ListStudents(ctx context.Context, request ListStudentsRequestObject) (ListStudentsResponseObject, error)
+	// CreateStudent Enrol a student with at least one guardian
+	// (POST /api/v1/students)
+	CreateStudent(ctx context.Context, request CreateStudentRequestObject) (CreateStudentResponseObject, error)
+	// GetStudent Read one student with guardians
+	// (GET /api/v1/students/{studentId})
+	GetStudent(ctx context.Context, request GetStudentRequestObject) (GetStudentResponseObject, error)
+	// CreateToken Create a personal access token for scripts and terminal use
+	// (POST /api/v1/tokens)
+	CreateToken(ctx context.Context, request CreateTokenRequestObject) (CreateTokenResponseObject, error)
 	// GetHealth Liveness check
 	// (GET /healthz)
 	GetHealth(ctx context.Context, request GetHealthRequestObject) (GetHealthResponseObject, error)
@@ -236,6 +1185,182 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// RequestOtp operation middleware
+func (sh *strictHandler) RequestOtp(w http.ResponseWriter, r *http.Request) {
+	var request RequestOtpRequestObject
+
+	var body RequestOtpJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RequestOtp(ctx, request.(RequestOtpRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RequestOtp")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RequestOtpResponseObject); ok {
+		if err := validResponse.VisitRequestOtpResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// VerifyOtp operation middleware
+func (sh *strictHandler) VerifyOtp(w http.ResponseWriter, r *http.Request) {
+	var request VerifyOtpRequestObject
+
+	var body VerifyOtpJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.VerifyOtp(ctx, request.(VerifyOtpRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "VerifyOtp")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(VerifyOtpResponseObject); ok {
+		if err := validResponse.VisitVerifyOtpResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListStudents operation middleware
+func (sh *strictHandler) ListStudents(w http.ResponseWriter, r *http.Request, params ListStudentsParams) {
+	var request ListStudentsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListStudents(ctx, request.(ListStudentsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListStudents")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListStudentsResponseObject); ok {
+		if err := validResponse.VisitListStudentsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateStudent operation middleware
+func (sh *strictHandler) CreateStudent(w http.ResponseWriter, r *http.Request) {
+	var request CreateStudentRequestObject
+
+	var body CreateStudentJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateStudent(ctx, request.(CreateStudentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateStudent")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateStudentResponseObject); ok {
+		if err := validResponse.VisitCreateStudentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetStudent operation middleware
+func (sh *strictHandler) GetStudent(w http.ResponseWriter, r *http.Request, studentId openapi_types.UUID) {
+	var request GetStudentRequestObject
+
+	request.StudentId = studentId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetStudent(ctx, request.(GetStudentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetStudent")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetStudentResponseObject); ok {
+		if err := validResponse.VisitGetStudentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateToken operation middleware
+func (sh *strictHandler) CreateToken(w http.ResponseWriter, r *http.Request) {
+	var request CreateTokenRequestObject
+
+	var body CreateTokenJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateToken(ctx, request.(CreateTokenRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateToken")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateTokenResponseObject); ok {
+		if err := validResponse.VisitCreateTokenResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // GetHealth operation middleware
