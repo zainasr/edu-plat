@@ -29,7 +29,13 @@ jobs:
       - name: Generated code is up to date
         run: |
           make gen
-          git diff --exit-code -- services/api/internal/api/gen services/api/internal/iam/store/gen services/api/internal/students/store/gen services/api/internal/platform/audit/store/gen
+          # Any modified or new file under services/api means the committed generated code is stale.
+          # This covers every module's gen folder, including ones added later.
+          if [ -n "$(git status --porcelain -- services/api)" ]; then
+            git status --short -- services/api
+            echo "Generated code is stale: run 'make gen' and commit the result."
+            exit 1
+          fi
       - name: Database roles and migrations
         run: |
           psql "postgresql://app:app@localhost:5432/app_dev" -v ON_ERROR_STOP=1 -f deploy/db/roles.sql
