@@ -11,10 +11,11 @@ import (
 	"github.com/zainasr/edu-plat/services/api/internal/students"
 )
 
-// enrolInput is a valid enrolment with a fresh guardian mobile.
-func enrolInput(t *testing.T) students.StudentInput {
+// enrolInput is a valid enrolment into the given section, with a fresh guardian mobile.
+func enrolInput(t *testing.T, sectionID string) students.StudentInput {
 	t.Helper()
 	return students.StudentInput{
+		SectionID:   sectionID,
 		FullName:    "Ali Khan",
 		FatherName:  "Imran Khan",
 		Gender:      "male",
@@ -51,15 +52,61 @@ func TestRLS_TenantBCannotReadOrWriteTenantA(t *testing.T) {
 		t.Fatalf("principals are in the wrong tenants: %s / %s", pA.TenantID, pB.TenantID)
 	}
 
-	svc := students.NewService(f.app)
-	created, err := svc.Create(ctx, pA, enrolInput(t))
+	svc := f.students
+	structA := newStructure(t, f, pA)
+	structB := newStructure(t, f, pB)
+	created, err := svc.Create(ctx, pA, enrolInput(t, structA.SectionID))
 	if err != nil {
 		t.Fatalf("tenant A enrols a student: %v", err)
 	}
 	// B needs its own guardian so the link attack below has a real B row to use.
-	if _, err := svc.Create(ctx, pB, enrolInput(t)); err != nil {
+	if _, err := svc.Create(ctx, pB, enrolInput(t, structB.SectionID)); err != nil {
 		t.Fatalf("tenant B enrols a student: %v", err)
 	}
+
+	t.Run("B cannot enrol a student into A's section", func(t *testing.T) {
+		_, err := svc.Create(ctx, pB, enrolInput(t, structA.SectionID))
+		if got := errCode(t, err); got != "org.section_not_found" {
+			t.Fatalf("code = %s, want org.section_not_found (A's section must look absent to B)", got)
+		}
+	})
+
+	t.Run("B's structure lists never contain A's classes, sections or sessions", func(t *testing.T) {
+		classes, err := f.org.ListClasses(ctx, pB)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, c := range classes {
+			if c.ID == structA.ClassID {
+				t.Fatal("tenant B can list tenant A's class")
+			}
+		}
+		sections, err := f.org.ListSections(ctx, pB, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, s := range sections {
+			if s.ID == structA.SectionID {
+				t.Fatal("tenant B can list tenant A's section")
+			}
+		}
+		sessions, err := f.org.ListSessions(ctx, pB)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, s := range sessions {
+			if s.ID == structA.SessionID {
+				t.Fatal("tenant B can list tenant A's session")
+			}
+		}
+	})
+
+	t.Run("B cannot archive A's class", func(t *testing.T) {
+		_, err := f.org.ArchiveClass(ctx, pB, structA.ClassID)
+		if got := errCode(t, err); got != "org.class_not_found" {
+			t.Fatalf("code = %s, want org.class_not_found", got)
+		}
+	})
 
 	t.Run("B cannot read A's student by id", func(t *testing.T) {
 		_, err := svc.Get(ctx, pB, created.ID)
@@ -153,7 +200,8 @@ func TestAudit_StudentCreateIsRecordedInTheSameTransaction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := students.NewService(f.app).Create(ctx, p, enrolInput(t)); err != nil {
+	sec := newStructure(t, f, p)
+	if _, err := f.students.Create(ctx, p, enrolInput(t, sec.SectionID)); err != nil {
 		t.Fatalf("create: %v", err)
 	}
 

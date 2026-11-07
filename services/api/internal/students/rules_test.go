@@ -12,6 +12,7 @@ var today = time.Date(2026, 11, 4, 0, 0, 0, 0, time.UTC)
 
 func validStudent() StudentInput {
 	return StudentInput{
+		SectionID:   "5c9c6c26-e0e4-4938-af5c-f6fc35688270",
 		FullName:    "Ali Khan",
 		FatherName:  "Imran Khan",
 		Gender:      "male",
@@ -47,6 +48,8 @@ func TestREQ_STU_001_MandatoryFieldsAreChecked(t *testing.T) {
 		{name: "missing full name", mutate: func(in *StudentInput) { in.FullName = " " }, wantField: "full_name"},
 		{name: "missing father name", mutate: func(in *StudentInput) { in.FatherName = "" }, wantField: "father_name"},
 		{name: "unknown gender", mutate: func(in *StudentInput) { in.Gender = "unknown" }, wantField: "gender"},
+		{name: "missing section", mutate: func(in *StudentInput) { in.SectionID = "" }, wantField: "section_id"},
+		{name: "section is not an id", mutate: func(in *StudentInput) { in.SectionID = "5-A" }, wantField: "section_id"},
 		{name: "date of birth in the future", mutate: func(in *StudentInput) { in.DateOfBirth = today.AddDate(0, 0, 1) }, wantField: "date_of_birth"},
 	}
 	for _, tt := range tests {

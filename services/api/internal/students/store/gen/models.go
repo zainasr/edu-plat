@@ -36,6 +36,40 @@ type AuditLog struct {
 	OccurredAt  pgtype.Timestamptz
 }
 
+type Branch struct {
+	ID        pgtype.UUID
+	TenantID  pgtype.UUID
+	Name      string
+	IsDefault bool
+	CreatedAt pgtype.Timestamptz
+	CreatedBy pgtype.UUID
+}
+
+type Class struct {
+	ID         pgtype.UUID
+	TenantID   pgtype.UUID
+	BranchID   pgtype.UUID
+	Name       string
+	GradeLevel int32
+	Status     string
+	CreatedAt  pgtype.Timestamptz
+	CreatedBy  pgtype.UUID
+}
+
+type Enrolment struct {
+	ID        pgtype.UUID
+	TenantID  pgtype.UUID
+	StudentID pgtype.UUID
+	SessionID pgtype.UUID
+	SectionID pgtype.UUID
+	Status    string
+	StartedOn pgtype.Date
+	EndedOn   pgtype.Date
+	Reason    pgtype.Text
+	CreatedAt pgtype.Timestamptz
+	CreatedBy pgtype.UUID
+}
+
 type Family struct {
 	ID        pgtype.UUID
 	TenantID  pgtype.UUID
@@ -95,6 +129,29 @@ type RoleAssignment struct {
 	Role         string
 	CreatedAt    pgtype.Timestamptz
 	CreatedBy    pgtype.UUID
+}
+
+type Section struct {
+	ID        pgtype.UUID
+	TenantID  pgtype.UUID
+	ClassID   pgtype.UUID
+	Name      string
+	Shift     string
+	Status    string
+	CreatedAt pgtype.Timestamptz
+	CreatedBy pgtype.UUID
+}
+
+type Session struct {
+	ID        pgtype.UUID
+	TenantID  pgtype.UUID
+	BranchID  pgtype.UUID
+	Name      string
+	StartsOn  pgtype.Date
+	EndsOn    pgtype.Date
+	IsCurrent bool
+	CreatedAt pgtype.Timestamptz
+	CreatedBy pgtype.UUID
 }
 
 type Student struct {

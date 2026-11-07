@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/zainasr/edu-plat/services/api/internal/iam"
+	"github.com/zainasr/edu-plat/services/api/internal/org"
 	"github.com/zainasr/edu-plat/services/api/internal/platform/apperr"
 	"github.com/zainasr/edu-plat/services/api/internal/platform/audit"
 	"github.com/zainasr/edu-plat/services/api/internal/platform/db"
@@ -34,6 +35,7 @@ type Student struct {
 	FamilyID       string
 	FamilyNumber   string
 	Guardians      []GuardianLink
+	Enrolment      *Enrolment // the current enrolment; nil when the student has none yet
 	CreatedAt      time.Time
 }
 
@@ -60,12 +62,13 @@ type Page struct {
 // (iam.Require) and pass the principal in, so every write is attributed.
 type Service struct {
 	pool *pgxpool.Pool
+	org  *org.Service // describes sections and sessions; this module never reads their tables
 	now  func() time.Time
 }
 
 // NewService builds the students service.
-func NewService(pool *pgxpool.Pool) *Service {
-	return &Service{pool: pool, now: time.Now}
+func NewService(pool *pgxpool.Pool, structure *org.Service) *Service {
+	return &Service{pool: pool, org: structure, now: time.Now}
 }
 
 // Create enrols a student and its guardians in one tenant transaction, with an audit entry.
@@ -87,6 +90,13 @@ func (s *Service) Create(ctx context.Context, p iam.Principal, in StudentInput) 
 	var created Student
 	err = db.WithTenant(ctx, s.pool, p.TenantID, func(tx pgx.Tx) error {
 		q := gen.New(tx)
+
+		// 0. Where is the student going? Checked first, so a bad section fails before any
+		//    counter moves. The org module answers inside this same transaction.
+		target, err := s.org.ResolveEnrolmentTarget(ctx, tx, p.TenantID, in.SectionID)
+		if err != nil {
+			return err
+		}
 
 		// 1. Find the family: existing guardians decide it, and they must agree.
 		familyID, guardianIDs, err := matchFamily(ctx, q, tenant, guardians)
@@ -162,6 +172,26 @@ func (s *Service) Create(ctx context.Context, p iam.Principal, in StudentInput) 
 			}
 		}
 
+		// 3b. The first enrolment: the section, in the current session, starting today.
+		sessionID, err := db.ParseUUID(target.SessionID)
+		if err != nil {
+			return err
+		}
+		sectionID, err := db.ParseUUID(target.Section.ID)
+		if err != nil {
+			return err
+		}
+		if _, err := q.InsertEnrolment(ctx, gen.InsertEnrolmentParams{
+			TenantID:  tenant,
+			StudentID: st.ID,
+			SessionID: sessionID,
+			SectionID: sectionID,
+			StartedOn: pgtype.Date{Time: dateOnly(s.now().In(pakistanZone)), Valid: true},
+			CreatedBy: actor,
+		}); err != nil {
+			return fmt.Errorf("insert enrolment: %w", err)
+		}
+
 		// 4. Audit, in the same transaction as the change.
 		studentID := db.UUIDString(st.ID)
 		if err := audit.Record(ctx, tx, audit.Entry{
@@ -172,12 +202,17 @@ func (s *Service) Create(ctx context.Context, p iam.Principal, in StudentInput) 
 			Action:      "student.created",
 			Entity:      "student",
 			EntityID:    studentID,
-			Summary:     map[string]any{"guardians": len(guardians), "family_id": db.UUIDString(familyID)},
+			Summary: map[string]any{
+				"guardians": len(guardians),
+				"family_id": db.UUIDString(familyID),
+				"section":   target.Section.ID,
+				"session":   target.SessionID,
+			},
 		}); err != nil {
 			return err
 		}
 
-		created, err = readStudent(ctx, q, tenant, st.ID)
+		created, err = s.readStudent(ctx, tx, tenant, st.ID)
 		return err
 	})
 	if err != nil {
@@ -200,7 +235,7 @@ func (s *Service) Get(ctx context.Context, p iam.Principal, id string) (Student,
 	var st Student
 	err = db.WithTenant(ctx, s.pool, p.TenantID, func(tx pgx.Tx) error {
 		var err error
-		st, err = readStudent(ctx, gen.New(tx), tenant, studentID)
+		st, err = s.readStudent(ctx, tx, tenant, studentID)
 		return err
 	})
 	if err != nil {
@@ -249,10 +284,17 @@ func (s *Service) List(ctx context.Context, p iam.Principal, limit int, cursor s
 		if err != nil {
 			return err
 		}
+		enrolmentsByStudent, err := s.describeEnrolments(ctx, tx, p.TenantID, tenant, ids)
+		if err != nil {
+			return err
+		}
 		for _, r := range rows {
-			page.Items = append(page.Items, toStudent(r.ID, r.RegistrationNo, r.FullName, r.FatherName,
+			key := db.UUIDString(r.ID)
+			st := toStudent(r.ID, r.RegistrationNo, r.FullName, r.FatherName,
 				r.Gender, r.DateOfBirth, r.Status, r.FamilyID, r.FamilyNumber, r.CreatedAt,
-				linksByStudent[db.UUIDString(r.ID)]))
+				linksByStudent[key])
+			st.Enrolment = currentOf(enrolmentsByStudent[key])
+			page.Items = append(page.Items, st)
 		}
 		if hasMore && len(rows) > 0 {
 			last := page.Items[len(page.Items)-1]
@@ -289,8 +331,10 @@ func matchFamily(ctx context.Context, q *gen.Queries, tenant pgtype.UUID, guardi
 	return familyID, ids, nil
 }
 
-// readStudent loads one student and its guardian links. The tenant transaction must be open.
-func readStudent(ctx context.Context, q *gen.Queries, tenant, id pgtype.UUID) (Student, error) {
+// readStudent loads one student with its guardian links and current enrolment.
+// The caller's tenant transaction must be open.
+func (s *Service) readStudent(ctx context.Context, tx pgx.Tx, tenant, id pgtype.UUID) (Student, error) {
+	q := gen.New(tx)
 	row, err := q.GetStudent(ctx, gen.GetStudentParams{TenantID: tenant, ID: id})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Student{}, apperr.NotFound("students.not_found", "Student not found.")
@@ -302,9 +346,15 @@ func readStudent(ctx context.Context, q *gen.Queries, tenant, id pgtype.UUID) (S
 	if err != nil {
 		return Student{}, err
 	}
-	return toStudent(row.ID, row.RegistrationNo, row.FullName, row.FatherName, row.Gender,
-		row.DateOfBirth, row.Status, row.FamilyID, row.FamilyNumber, row.CreatedAt,
-		links[db.UUIDString(row.ID)]), nil
+	enrolments, err := s.describeEnrolments(ctx, tx, db.UUIDString(tenant), tenant, []pgtype.UUID{id})
+	if err != nil {
+		return Student{}, err
+	}
+	key := db.UUIDString(row.ID)
+	st := toStudent(row.ID, row.RegistrationNo, row.FullName, row.FatherName, row.Gender,
+		row.DateOfBirth, row.Status, row.FamilyID, row.FamilyNumber, row.CreatedAt, links[key])
+	st.Enrolment = currentOf(enrolments[key])
+	return st, nil
 }
 
 func loadLinks(ctx context.Context, q *gen.Queries, tenant pgtype.UUID, studentIDs []pgtype.UUID) (map[string][]GuardianLink, error) {

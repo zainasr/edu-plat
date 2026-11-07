@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/zainasr/edu-plat/services/api/internal/platform/apperr"
+	"github.com/zainasr/edu-plat/services/api/internal/platform/db"
 	"github.com/zainasr/edu-plat/services/api/internal/platform/phone"
 )
 
@@ -26,6 +27,7 @@ type GuardianInput struct {
 
 // StudentInput is an enrolment request.
 type StudentInput struct {
+	SectionID   string // the section to enrol in (REQ-STU-001: class and section are mandatory)
 	FullName    string
 	FatherName  string
 	Gender      string
@@ -76,6 +78,11 @@ func validateEnrolment(in StudentInput, today time.Time) ([]guardianRule, error)
 	}
 	if !genders[in.Gender] {
 		add("gender", "Use male, female or other.")
+	}
+	// REQ-STU-001: class and section are mandatory. Whether the section exists, is active and
+	// has a current session is the org module's answer, checked inside the transaction.
+	if _, err := db.ParseUUID(in.SectionID); err != nil {
+		add("section_id", "Required: the id of the section to enrol in.")
 	}
 	if in.DateOfBirth.IsZero() || in.DateOfBirth.After(today) {
 		add("date_of_birth", "Required, and not in the future.")

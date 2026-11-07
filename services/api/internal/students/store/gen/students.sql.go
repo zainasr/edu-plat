@@ -11,6 +11,59 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const activeEnrolmentForStudent = `-- name: ActiveEnrolmentForStudent :one
+SELECT id, session_id, section_id
+FROM enrolments
+WHERE tenant_id = $1 AND student_id = $2 AND status = 'active'
+ORDER BY created_at DESC, id DESC
+LIMIT 1
+`
+
+type ActiveEnrolmentForStudentParams struct {
+	TenantID  pgtype.UUID
+	StudentID pgtype.UUID
+}
+
+type ActiveEnrolmentForStudentRow struct {
+	ID        pgtype.UUID
+	SessionID pgtype.UUID
+	SectionID pgtype.UUID
+}
+
+func (q *Queries) ActiveEnrolmentForStudent(ctx context.Context, arg ActiveEnrolmentForStudentParams) (ActiveEnrolmentForStudentRow, error) {
+	row := q.db.QueryRow(ctx, activeEnrolmentForStudent, arg.TenantID, arg.StudentID)
+	var i ActiveEnrolmentForStudentRow
+	err := row.Scan(&i.ID, &i.SessionID, &i.SectionID)
+	return i, err
+}
+
+const closeEnrolment = `-- name: CloseEnrolment :execrows
+UPDATE enrolments
+SET status = 'closed', ended_on = $1, reason = $2
+WHERE tenant_id = $3 AND id = $4 AND status = 'active'
+`
+
+type CloseEnrolmentParams struct {
+	EndedOn  pgtype.Date
+	Reason   pgtype.Text
+	TenantID pgtype.UUID
+	ID       pgtype.UUID
+}
+
+// Conditional: only an active enrolment can be closed, so a double move cannot close it twice.
+func (q *Queries) CloseEnrolment(ctx context.Context, arg CloseEnrolmentParams) (int64, error) {
+	result, err := q.db.Exec(ctx, closeEnrolment,
+		arg.EndedOn,
+		arg.Reason,
+		arg.TenantID,
+		arg.ID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getStudent = `-- name: GetStudent :one
 SELECT s.id, s.registration_no, s.full_name, s.father_name, s.gender,
        s.date_of_birth, s.status, s.family_id, s.created_at, f.number AS family_number
@@ -83,6 +136,36 @@ func (q *Queries) GuardianByMobile(ctx context.Context, arg GuardianByMobilePara
 		&i.Mobile,
 	)
 	return i, err
+}
+
+const insertEnrolment = `-- name: InsertEnrolment :one
+INSERT INTO enrolments (tenant_id, student_id, session_id, section_id, started_on, created_by)
+VALUES ($1, $2, $3, $4,
+        $5, $6)
+RETURNING id
+`
+
+type InsertEnrolmentParams struct {
+	TenantID  pgtype.UUID
+	StudentID pgtype.UUID
+	SessionID pgtype.UUID
+	SectionID pgtype.UUID
+	StartedOn pgtype.Date
+	CreatedBy pgtype.UUID
+}
+
+func (q *Queries) InsertEnrolment(ctx context.Context, arg InsertEnrolmentParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, insertEnrolment,
+		arg.TenantID,
+		arg.StudentID,
+		arg.SessionID,
+		arg.SectionID,
+		arg.StartedOn,
+		arg.CreatedBy,
+	)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
 }
 
 const insertFamily = `-- name: InsertFamily :one
@@ -209,6 +292,59 @@ func (q *Queries) InsertStudent(ctx context.Context, arg InsertStudentParams) (I
 	var i InsertStudentRow
 	err := row.Scan(&i.ID, &i.CreatedAt)
 	return i, err
+}
+
+const listEnrolmentsForStudents = `-- name: ListEnrolmentsForStudents :many
+SELECT id, student_id, session_id, section_id, status, started_on, ended_on, reason
+FROM enrolments
+WHERE tenant_id = $1 AND student_id = ANY($2::uuid[])
+ORDER BY created_at DESC, id DESC
+`
+
+type ListEnrolmentsForStudentsParams struct {
+	TenantID   pgtype.UUID
+	StudentIds []pgtype.UUID
+}
+
+type ListEnrolmentsForStudentsRow struct {
+	ID        pgtype.UUID
+	StudentID pgtype.UUID
+	SessionID pgtype.UUID
+	SectionID pgtype.UUID
+	Status    string
+	StartedOn pgtype.Date
+	EndedOn   pgtype.Date
+	Reason    pgtype.Text
+}
+
+// Newest first. For a page of students, the first active row per student is the current enrolment.
+func (q *Queries) ListEnrolmentsForStudents(ctx context.Context, arg ListEnrolmentsForStudentsParams) ([]ListEnrolmentsForStudentsRow, error) {
+	rows, err := q.db.Query(ctx, listEnrolmentsForStudents, arg.TenantID, arg.StudentIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListEnrolmentsForStudentsRow
+	for rows.Next() {
+		var i ListEnrolmentsForStudentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.StudentID,
+			&i.SessionID,
+			&i.SectionID,
+			&i.Status,
+			&i.StartedOn,
+			&i.EndedOn,
+			&i.Reason,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listGuardianLinksForStudents = `-- name: ListGuardianLinksForStudents :many

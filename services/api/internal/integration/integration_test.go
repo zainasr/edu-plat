@@ -16,7 +16,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/zainasr/edu-plat/services/api/internal/iam"
+	"github.com/zainasr/edu-plat/services/api/internal/org"
 	"github.com/zainasr/edu-plat/services/api/internal/platform/db"
+	"github.com/zainasr/edu-plat/services/api/internal/students"
 )
 
 // captureSender remembers the last code per number instead of sending it.
@@ -66,10 +68,12 @@ func newMobile(t *testing.T) string {
 }
 
 type fixture struct {
-	app    *pgxpool.Pool
-	admin  *pgxpool.Pool
-	sender *captureSender
-	iam    *iam.Service
+	app      *pgxpool.Pool
+	admin    *pgxpool.Pool
+	sender   *captureSender
+	iam      *iam.Service
+	org      *org.Service
+	students *students.Service
 }
 
 // newTenant creates a tenant with one owner through the real bootstrap path.
@@ -121,11 +125,14 @@ func newFixture(t *testing.T) *fixture {
 
 	sender := &captureSender{codes: map[string]string{}}
 	secret := []byte("integration-test-secret-0123456789abcdef")
+	structure := org.NewService(app)
 	return &fixture{
-		app:    app,
-		admin:  admin,
-		sender: sender,
-		iam:    iam.NewService(app, sender, secret),
+		app:      app,
+		admin:    admin,
+		sender:   sender,
+		iam:      iam.NewService(app, sender, secret),
+		org:      structure,
+		students: students.NewService(app, structure),
 	}
 }
 

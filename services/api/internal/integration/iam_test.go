@@ -7,7 +7,6 @@ import (
 
 	"github.com/zainasr/edu-plat/services/api/internal/api"
 	"github.com/zainasr/edu-plat/services/api/internal/platform/apperr"
-	"github.com/zainasr/edu-plat/services/api/internal/students"
 )
 
 // US-IAM-003: after 5 wrong codes the number is locked, even for the right code.
@@ -180,7 +179,7 @@ func TestREQ_IAM_002_CallerWithoutThePermissionGets403(t *testing.T) {
 	ctx := context.Background()
 	slug, mobile, tenantID := newTenant(t, f, "noperm")
 	session := signIn(t, f, mobile, slug)
-	h := api.Handler(api.NewServer(f.iam, students.NewService(f.app)), f.iam)
+	h := api.Handler(api.NewServer(f.iam, f.org, f.students), f.iam)
 
 	// Remove every role: the membership stays active but holds no permission.
 	if _, err := f.admin.Exec(ctx, `DELETE FROM role_assignments WHERE tenant_id = $1`, tenantID); err != nil {

@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Education Platform API
-  version: 0.2.0
+  version: 0.3.0
   description: Source of truth for every capability (DEC-004). Edit this first, then the code.
 # Infrastructure endpoints (health) sit at the root for the load balancer.
 # Product endpoints carry their version in the path, for example /api/v1/students.
@@ -13,6 +13,7 @@ tags:
   - name: auth
   - name: tokens
   - name: students
+  - name: structure
 
 security:
   - bearerAuth: []
@@ -175,6 +176,246 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
 
+  /api/v1/students/{studentId}/change-section:
+    post:
+      operationId: changeStudentSection
+      tags: [students]
+      summary: Move a student to another section, keeping history
+      description: |
+        Requires `student.edit`. Closes the current enrolment and opens a new one in the
+        target section, recording the reason (US-STU-005, REQ-STU-008). Attendance and other
+        history stay with the student. Moving to the same section, or to an archived one, is refused.
+      parameters:
+        - name: studentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChangeSection" }
+      responses:
+        "200":
+          description: The student with the new enrolment
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Student" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/students/{studentId}/enrolments:
+    get:
+      operationId: listStudentEnrolments
+      tags: [students]
+      summary: The enrolment history of one student, newest first
+      description: Requires `student.view`. Every class, section or shift change is an entry (REQ-STU-008).
+      parameters:
+        - name: studentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: The history
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnrolmentList" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/sessions:
+    post:
+      operationId: createSession
+      tags: [structure]
+      summary: Create an academic session (year)
+      description: |
+        Requires `session.manage`. The first session of a branch becomes current. Later sessions
+        are created not current; switch with make-current (BR-ORG-001, REQ-ORG-006).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AcademicSessionCreate" }
+      responses:
+        "201":
+          description: Session created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AcademicSession" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    get:
+      operationId: listSessions
+      tags: [structure]
+      summary: List the sessions of the tenant's branch, newest first
+      description: Requires `org.view`.
+      responses:
+        "200":
+          description: The sessions
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AcademicSessionList" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/sessions/{sessionId}/make-current:
+    post:
+      operationId: makeSessionCurrent
+      tags: [structure]
+      summary: Make this session the current one
+      description: Requires `session.manage`. The previous current session stops being current in the same transaction (BR-ORG-001).
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: The session, now current
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AcademicSession" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/classes:
+    post:
+      operationId: createClass
+      tags: [structure]
+      summary: Create a class (for example Class 5)
+      description: Requires `org.manage`. The grade level orders classes and maps promotions (REQ-ORG-008).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ClassCreate" }
+      responses:
+        "201":
+          description: Class created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Class" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    get:
+      operationId: listClasses
+      tags: [structure]
+      summary: List the classes, ordered by grade level
+      description: Requires `org.view`.
+      responses:
+        "200":
+          description: The classes
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ClassList" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/classes/{classId}/archive:
+    post:
+      operationId: archiveClass
+      tags: [structure]
+      summary: Archive a class; it is never deleted
+      description: Requires `org.manage`. Business records are archived, not deleted (BR-ORG-003, DEC-011). New enrolments into its sections are refused.
+      parameters:
+        - name: classId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: The archived class
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Class" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/sections:
+    post:
+      operationId: createSection
+      tags: [structure]
+      summary: Create a section of a class, in a shift
+      description: |
+        Requires `org.manage`. A shift is a property of a section: "5-A Morning" and "5-A Evening"
+        are different sections (REQ-ORG-005).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SectionCreate" }
+      responses:
+        "201":
+          description: Section created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Section" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    get:
+      operationId: listSections
+      tags: [structure]
+      summary: List sections, optionally of one class
+      description: Requires `org.view`.
+      parameters:
+        - name: class_id
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: The sections
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SectionList" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/sections/{sectionId}/archive:
+    post:
+      operationId: archiveSection
+      tags: [structure]
+      summary: Archive a section; it is never deleted
+      description: Requires `org.manage`. Students already enrolled stay enrolled; new enrolments are refused (BR-ORG-003).
+      parameters:
+        - name: sectionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: The archived section
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Section" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -205,6 +446,11 @@ components:
           schema: { $ref: "#/components/schemas/ErrorEnvelope" }
     Forbidden:
       description: Token lacks the named permission
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    Conflict:
+      description: The request clashes with existing data, for example a duplicate name
       content:
         application/json:
           schema: { $ref: "#/components/schemas/ErrorEnvelope" }
@@ -349,9 +595,13 @@ components:
 
     StudentCreate:
       type: object
-      required: [full_name, father_name, gender, date_of_birth, guardians]
+      required: [full_name, father_name, gender, date_of_birth, section_id, guardians]
       additionalProperties: false
       properties:
+        section_id:
+          type: string
+          format: uuid
+          description: The section to enrol in, in the branch's current session (REQ-STU-001).
         full_name: { type: string, minLength: 1, maxLength: 120, example: Ali Khan }
         father_name:
           type: string
@@ -383,9 +633,14 @@ components:
 
     Student:
       type: object
-      required: [id, registration_no, full_name, father_name, gender, date_of_birth, status, family, guardians, created_at]
+      required: [id, registration_no, full_name, father_name, gender, date_of_birth, status, family, enrolment, guardians, created_at]
       properties:
         id: { type: string, format: uuid }
+        enrolment:
+          nullable: true
+          description: The current enrolment. Null for a student who has none yet (for example one created before sections existed).
+          allOf:
+            - $ref: "#/components/schemas/Enrolment"
         registration_no: { type: string, example: "REG-2026-00001" }
         full_name: { type: string }
         father_name: { type: string }
@@ -416,3 +671,128 @@ components:
           type: string
           nullable: true
           description: Pass as ?cursor= to get the next page. Null on the last page.
+
+    Shift:
+      type: string
+      description: A shift is a property of a section (REQ-ORG-005).
+      enum: [morning, evening]
+
+    AcademicSessionCreate:
+      type: object
+      required: [name, starts_on, ends_on]
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 40, example: "2026-27" }
+        starts_on: { type: string, format: date, example: "2026-04-01" }
+        ends_on: { type: string, format: date, example: "2027-03-31" }
+
+    AcademicSession:
+      type: object
+      required: [id, name, starts_on, ends_on, is_current]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        starts_on: { type: string, format: date }
+        ends_on: { type: string, format: date }
+        is_current: { type: boolean }
+
+    AcademicSessionList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AcademicSession" }
+
+    ClassCreate:
+      type: object
+      required: [name, grade_level]
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 40, example: "Class 5" }
+        grade_level:
+          type: integer
+          minimum: 0
+          maximum: 16
+          description: Orders classes and maps promotions. 0 is early years.
+
+    Class:
+      type: object
+      required: [id, name, grade_level, status]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        grade_level: { type: integer }
+        status: { type: string, enum: [active, archived] }
+
+    ClassList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Class" }
+
+    SectionCreate:
+      type: object
+      required: [class_id, name, shift]
+      additionalProperties: false
+      properties:
+        class_id: { type: string, format: uuid }
+        name: { type: string, minLength: 1, maxLength: 20, example: A }
+        shift: { $ref: "#/components/schemas/Shift" }
+
+    Section:
+      type: object
+      required: [id, class_id, class_name, name, shift, status]
+      properties:
+        id: { type: string, format: uuid }
+        class_id: { type: string, format: uuid }
+        class_name: { type: string }
+        name: { type: string }
+        shift: { $ref: "#/components/schemas/Shift" }
+        status: { type: string, enum: [active, archived] }
+
+    SectionList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Section" }
+
+    ChangeSection:
+      type: object
+      required: [section_id, reason]
+      additionalProperties: false
+      properties:
+        section_id: { type: string, format: uuid }
+        reason:
+          type: string
+          minLength: 3
+          maxLength: 200
+          example: correction
+
+    Enrolment:
+      type: object
+      required: [id, session_id, session_name, section_id, class_name, section_name, shift, status, started_on]
+      properties:
+        id: { type: string, format: uuid }
+        session_id: { type: string, format: uuid }
+        session_name: { type: string }
+        section_id: { type: string, format: uuid }
+        class_name: { type: string }
+        section_name: { type: string }
+        shift: { $ref: "#/components/schemas/Shift" }
+        status: { type: string, enum: [active, closed] }
+        started_on: { type: string, format: date }
+        ended_on: { type: string, format: date, nullable: true }
+        reason: { type: string, nullable: true, description: Why the student moved (set when an enrolment is closed by a move). }
+
+    EnrolmentList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Enrolment" }

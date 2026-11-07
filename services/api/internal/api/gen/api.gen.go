@@ -18,6 +18,42 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for ClassStatus.
+const (
+	ClassStatusActive   ClassStatus = "active"
+	ClassStatusArchived ClassStatus = "archived"
+)
+
+// Valid indicates whether the value is a known member of the ClassStatus enum.
+func (e ClassStatus) Valid() bool {
+	switch e {
+	case ClassStatusActive:
+		return true
+	case ClassStatusArchived:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EnrolmentStatus.
+const (
+	EnrolmentStatusActive EnrolmentStatus = "active"
+	EnrolmentStatusClosed EnrolmentStatus = "closed"
+)
+
+// Valid indicates whether the value is a known member of the EnrolmentStatus enum.
+func (e EnrolmentStatus) Valid() bool {
+	switch e {
+	case EnrolmentStatusActive:
+		return true
+	case EnrolmentStatusClosed:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for Gender.
 const (
 	GenderFemale Gender = "female"
@@ -99,19 +135,140 @@ func (e Relationship) Valid() bool {
 	}
 }
 
+// Defines values for SectionStatus.
+const (
+	SectionStatusActive   SectionStatus = "active"
+	SectionStatusArchived SectionStatus = "archived"
+)
+
+// Valid indicates whether the value is a known member of the SectionStatus enum.
+func (e SectionStatus) Valid() bool {
+	switch e {
+	case SectionStatusActive:
+		return true
+	case SectionStatusArchived:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for Shift.
+const (
+	Evening Shift = "evening"
+	Morning Shift = "morning"
+)
+
+// Valid indicates whether the value is a known member of the Shift enum.
+func (e Shift) Valid() bool {
+	switch e {
+	case Evening:
+		return true
+	case Morning:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for StudentStatus.
 const (
-	Active StudentStatus = "active"
+	StudentStatusActive StudentStatus = "active"
 )
 
 // Valid indicates whether the value is a known member of the StudentStatus enum.
 func (e StudentStatus) Valid() bool {
 	switch e {
-	case Active:
+	case StudentStatusActive:
 		return true
 	default:
 		return false
 	}
+}
+
+// AcademicSession defines model for AcademicSession.
+type AcademicSession struct {
+	EndsOn    openapi_types.Date `json:"ends_on"`
+	Id        openapi_types.UUID `json:"id"`
+	IsCurrent bool               `json:"is_current"`
+	Name      string             `json:"name"`
+	StartsOn  openapi_types.Date `json:"starts_on"`
+}
+
+// AcademicSessionCreate defines model for AcademicSessionCreate.
+type AcademicSessionCreate struct {
+	// EndsOn Example: 2027-03-31
+	EndsOn openapi_types.Date `json:"ends_on"`
+
+	// Name Example: 2026-27
+	Name string `json:"name"`
+
+	// StartsOn Example: 2026-04-01
+	StartsOn openapi_types.Date `json:"starts_on"`
+}
+
+// AcademicSessionList defines model for AcademicSessionList.
+type AcademicSessionList struct {
+	Items []AcademicSession `json:"items"`
+}
+
+// ChangeSection defines model for ChangeSection.
+type ChangeSection struct {
+	// Reason Example: correction
+	Reason    string             `json:"reason"`
+	SectionId openapi_types.UUID `json:"section_id"`
+}
+
+// Class defines model for Class.
+type Class struct {
+	GradeLevel int                `json:"grade_level"`
+	Id         openapi_types.UUID `json:"id"`
+	Name       string             `json:"name"`
+	Status     ClassStatus        `json:"status"`
+}
+
+// ClassStatus defines model for Class.Status.
+type ClassStatus string
+
+// ClassCreate defines model for ClassCreate.
+type ClassCreate struct {
+	// GradeLevel Orders classes and maps promotions. 0 is early years.
+	GradeLevel int `json:"grade_level"`
+
+	// Name Example: Class 5
+	Name string `json:"name"`
+}
+
+// ClassList defines model for ClassList.
+type ClassList struct {
+	Items []Class `json:"items"`
+}
+
+// Enrolment defines model for Enrolment.
+type Enrolment struct {
+	ClassName string              `json:"class_name"`
+	EndedOn   *openapi_types.Date `json:"ended_on,omitempty"`
+	Id        openapi_types.UUID  `json:"id"`
+
+	// Reason Why the student moved (set when an enrolment is closed by a move).
+	Reason      *string            `json:"reason,omitempty"`
+	SectionId   openapi_types.UUID `json:"section_id"`
+	SectionName string             `json:"section_name"`
+	SessionId   openapi_types.UUID `json:"session_id"`
+	SessionName string             `json:"session_name"`
+
+	// Shift A shift is a property of a section (REQ-ORG-005).
+	Shift     Shift              `json:"shift"`
+	StartedOn openapi_types.Date `json:"started_on"`
+	Status    EnrolmentStatus    `json:"status"`
+}
+
+// EnrolmentStatus defines model for Enrolment.Status.
+type EnrolmentStatus string
+
+// EnrolmentList defines model for EnrolmentList.
+type EnrolmentList struct {
+	Items []Enrolment `json:"items"`
 }
 
 // ErrorEnvelope defines model for ErrorEnvelope.
@@ -214,6 +371,37 @@ type OtpVerify struct {
 // Relationship A guardian's relation to the student (REQ-STU-002).
 type Relationship string
 
+// Section defines model for Section.
+type Section struct {
+	ClassId   openapi_types.UUID `json:"class_id"`
+	ClassName string             `json:"class_name"`
+	Id        openapi_types.UUID `json:"id"`
+	Name      string             `json:"name"`
+
+	// Shift A shift is a property of a section (REQ-ORG-005).
+	Shift  Shift         `json:"shift"`
+	Status SectionStatus `json:"status"`
+}
+
+// SectionStatus defines model for Section.Status.
+type SectionStatus string
+
+// SectionCreate defines model for SectionCreate.
+type SectionCreate struct {
+	ClassId openapi_types.UUID `json:"class_id"`
+
+	// Name Example: A
+	Name string `json:"name"`
+
+	// Shift A shift is a property of a section (REQ-ORG-005).
+	Shift Shift `json:"shift"`
+}
+
+// SectionList defines model for SectionList.
+type SectionList struct {
+	Items []Section `json:"items"`
+}
+
 // Session defines model for Session.
 type Session struct {
 	ExpiresAt time.Time `json:"expires_at"`
@@ -223,11 +411,17 @@ type Session struct {
 	Token string `json:"token"`
 }
 
+// Shift A shift is a property of a section (REQ-ORG-005).
+type Shift string
+
 // Student defines model for Student.
 type Student struct {
 	CreatedAt   time.Time          `json:"created_at"`
 	DateOfBirth openapi_types.Date `json:"date_of_birth"`
-	Family      struct {
+
+	// Enrolment The current enrolment. Null for a student who has none yet (for example one created before sections existed).
+	Enrolment *Enrolment `json:"enrolment"`
+	Family    struct {
 		Id openapi_types.UUID `json:"id"`
 
 		// Number Example: F-00001
@@ -261,6 +455,9 @@ type StudentCreate struct {
 	FullName  string          `json:"full_name"`
 	Gender    Gender          `json:"gender"`
 	Guardians []GuardianInput `json:"guardians"`
+
+	// SectionId The section to enrol in, in the branch's current session (REQ-STU-001).
+	SectionId openapi_types.UUID `json:"section_id"`
 }
 
 // StudentPage defines model for StudentPage.
@@ -299,6 +496,9 @@ type TokenCreated struct {
 	Token string `json:"token"`
 }
 
+// Conflict defines model for Conflict.
+type Conflict = ErrorEnvelope
+
 // Forbidden defines model for Forbidden.
 type Forbidden = ErrorEnvelope
 
@@ -320,6 +520,11 @@ type Unauthenticated = ErrorEnvelope
 // ValidationError defines model for ValidationError.
 type ValidationError = ErrorEnvelope
 
+// ListSectionsParams defines parameters for ListSections.
+type ListSectionsParams struct {
+	ClassId *openapi_types.UUID `form:"class_id,omitempty" json:"class_id,omitempty"`
+}
+
 // ListStudentsParams defines parameters for ListStudents.
 type ListStudentsParams struct {
 	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
@@ -332,8 +537,20 @@ type RequestOtpJSONRequestBody = OtpRequest
 // VerifyOtpJSONRequestBody defines body for VerifyOtp for application/json ContentType.
 type VerifyOtpJSONRequestBody = OtpVerify
 
+// CreateClassJSONRequestBody defines body for CreateClass for application/json ContentType.
+type CreateClassJSONRequestBody = ClassCreate
+
+// CreateSectionJSONRequestBody defines body for CreateSection for application/json ContentType.
+type CreateSectionJSONRequestBody = SectionCreate
+
+// CreateSessionJSONRequestBody defines body for CreateSession for application/json ContentType.
+type CreateSessionJSONRequestBody = AcademicSessionCreate
+
 // CreateStudentJSONRequestBody defines body for CreateStudent for application/json ContentType.
 type CreateStudentJSONRequestBody = StudentCreate
+
+// ChangeStudentSectionJSONRequestBody defines body for ChangeStudentSection for application/json ContentType.
+type ChangeStudentSectionJSONRequestBody = ChangeSection
 
 // CreateTokenJSONRequestBody defines body for CreateToken for application/json ContentType.
 type CreateTokenJSONRequestBody = TokenCreate
@@ -346,6 +563,33 @@ type ServerInterface interface {
 	// VerifyOtp Exchange a one-time code for a session token in one tenant
 	// (POST /api/v1/auth/otp/verify)
 	VerifyOtp(w http.ResponseWriter, r *http.Request)
+	// ListClasses List the classes, ordered by grade level
+	// (GET /api/v1/classes)
+	ListClasses(w http.ResponseWriter, r *http.Request)
+	// CreateClass Create a class (for example Class 5)
+	// (POST /api/v1/classes)
+	CreateClass(w http.ResponseWriter, r *http.Request)
+	// ArchiveClass Archive a class; it is never deleted
+	// (POST /api/v1/classes/{classId}/archive)
+	ArchiveClass(w http.ResponseWriter, r *http.Request, classId openapi_types.UUID)
+	// ListSections List sections, optionally of one class
+	// (GET /api/v1/sections)
+	ListSections(w http.ResponseWriter, r *http.Request, params ListSectionsParams)
+	// CreateSection Create a section of a class, in a shift
+	// (POST /api/v1/sections)
+	CreateSection(w http.ResponseWriter, r *http.Request)
+	// ArchiveSection Archive a section; it is never deleted
+	// (POST /api/v1/sections/{sectionId}/archive)
+	ArchiveSection(w http.ResponseWriter, r *http.Request, sectionId openapi_types.UUID)
+	// ListSessions List the sessions of the tenant's branch, newest first
+	// (GET /api/v1/sessions)
+	ListSessions(w http.ResponseWriter, r *http.Request)
+	// CreateSession Create an academic session (year)
+	// (POST /api/v1/sessions)
+	CreateSession(w http.ResponseWriter, r *http.Request)
+	// MakeSessionCurrent Make this session the current one
+	// (POST /api/v1/sessions/{sessionId}/make-current)
+	MakeSessionCurrent(w http.ResponseWriter, r *http.Request, sessionId openapi_types.UUID)
 	// ListStudents List students in the caller's tenant (cursor paginated)
 	// (GET /api/v1/students)
 	ListStudents(w http.ResponseWriter, r *http.Request, params ListStudentsParams)
@@ -355,6 +599,12 @@ type ServerInterface interface {
 	// GetStudent Read one student with guardians
 	// (GET /api/v1/students/{studentId})
 	GetStudent(w http.ResponseWriter, r *http.Request, studentId openapi_types.UUID)
+	// ChangeStudentSection Move a student to another section, keeping history
+	// (POST /api/v1/students/{studentId}/change-section)
+	ChangeStudentSection(w http.ResponseWriter, r *http.Request, studentId openapi_types.UUID)
+	// ListStudentEnrolments The enrolment history of one student, newest first
+	// (GET /api/v1/students/{studentId}/enrolments)
+	ListStudentEnrolments(w http.ResponseWriter, r *http.Request, studentId openapi_types.UUID)
 	// CreateToken Create a personal access token for scripts and terminal use
 	// (POST /api/v1/tokens)
 	CreateToken(w http.ResponseWriter, r *http.Request)
@@ -391,6 +641,187 @@ func (siw *ServerInterfaceWrapper) VerifyOtp(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.VerifyOtp(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListClasses operation middleware
+func (siw *ServerInterfaceWrapper) ListClasses(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListClasses(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateClass operation middleware
+func (siw *ServerInterfaceWrapper) CreateClass(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateClass(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ArchiveClass operation middleware
+func (siw *ServerInterfaceWrapper) ArchiveClass(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "classId" -------------
+	var classId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "classId", r.PathValue("classId"), &classId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "classId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ArchiveClass(w, r, classId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListSections operation middleware
+func (siw *ServerInterfaceWrapper) ListSections(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListSectionsParams
+
+	// ------------- Optional query parameter "class_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "class_id", r.URL.Query(), &params.ClassId, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "class_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "class_id", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSections(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateSection operation middleware
+func (siw *ServerInterfaceWrapper) CreateSection(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateSection(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ArchiveSection operation middleware
+func (siw *ServerInterfaceWrapper) ArchiveSection(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "sectionId" -------------
+	var sectionId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "sectionId", r.PathValue("sectionId"), &sectionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sectionId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ArchiveSection(w, r, sectionId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListSessions operation middleware
+func (siw *ServerInterfaceWrapper) ListSessions(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSessions(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateSession operation middleware
+func (siw *ServerInterfaceWrapper) CreateSession(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateSession(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// MakeSessionCurrent operation middleware
+func (siw *ServerInterfaceWrapper) MakeSessionCurrent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "sessionId" -------------
+	var sessionId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "sessionId", r.PathValue("sessionId"), &sessionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sessionId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.MakeSessionCurrent(w, r, sessionId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -477,6 +908,58 @@ func (siw *ServerInterfaceWrapper) GetStudent(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetStudent(w, r, studentId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ChangeStudentSection operation middleware
+func (siw *ServerInterfaceWrapper) ChangeStudentSection(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "studentId" -------------
+	var studentId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "studentId", r.PathValue("studentId"), &studentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "studentId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ChangeStudentSection(w, r, studentId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListStudentEnrolments operation middleware
+func (siw *ServerInterfaceWrapper) ListStudentEnrolments(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "studentId" -------------
+	var studentId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "studentId", r.PathValue("studentId"), &studentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "studentId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListStudentEnrolments(w, r, studentId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -641,9 +1124,22 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/students", wrapper.ListStudents)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/students", wrapper.CreateStudent)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/students/{studentId}", wrapper.GetStudent)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/students/{studentId}/change-section", wrapper.ChangeStudentSection)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/students/{studentId}/enrolments", wrapper.ListStudentEnrolments)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/sessions", wrapper.ListSessions)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/sessions", wrapper.CreateSession)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/sessions/{sessionId}/make-current", wrapper.MakeSessionCurrent)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/classes", wrapper.ListClasses)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/classes", wrapper.CreateClass)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/classes/{classId}/archive", wrapper.ArchiveClass)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/sections", wrapper.ListSections)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/sections", wrapper.CreateSection)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/sections/{sectionId}/archive", wrapper.ArchiveSection)
 
 	return m
 }
+
+type ConflictJSONResponse ErrorEnvelope
 
 type ForbiddenJSONResponse ErrorEnvelope
 
@@ -776,6 +1272,720 @@ func (response VerifyOtp423JSONResponse) VisitVerifyOtpResponse(w http.ResponseW
 type VerifyOtp500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response VerifyOtp500JSONResponse) VisitVerifyOtpResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListClassesRequestObject struct {
+}
+
+type ListClassesResponseObject interface {
+	VisitListClassesResponse(w http.ResponseWriter) error
+}
+
+type ListClasses200JSONResponse ClassList
+
+func (response ListClasses200JSONResponse) VisitListClassesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListClasses401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ListClasses401JSONResponse) VisitListClassesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListClasses403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListClasses403JSONResponse) VisitListClassesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListClasses500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListClasses500JSONResponse) VisitListClassesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateClassRequestObject struct {
+	Body *CreateClassJSONRequestBody
+}
+
+type CreateClassResponseObject interface {
+	VisitCreateClassResponse(w http.ResponseWriter) error
+}
+
+type CreateClass201JSONResponse Class
+
+func (response CreateClass201JSONResponse) VisitCreateClassResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateClass400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response CreateClass400JSONResponse) VisitCreateClassResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateClass401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response CreateClass401JSONResponse) VisitCreateClassResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateClass403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateClass403JSONResponse) VisitCreateClassResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateClass409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateClass409JSONResponse) VisitCreateClassResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateClass500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response CreateClass500JSONResponse) VisitCreateClassResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ArchiveClassRequestObject struct {
+	ClassId openapi_types.UUID `json:"classId"`
+}
+
+type ArchiveClassResponseObject interface {
+	VisitArchiveClassResponse(w http.ResponseWriter) error
+}
+
+type ArchiveClass200JSONResponse Class
+
+func (response ArchiveClass200JSONResponse) VisitArchiveClassResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ArchiveClass401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ArchiveClass401JSONResponse) VisitArchiveClassResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ArchiveClass403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ArchiveClass403JSONResponse) VisitArchiveClassResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ArchiveClass404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ArchiveClass404JSONResponse) VisitArchiveClassResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ArchiveClass500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ArchiveClass500JSONResponse) VisitArchiveClassResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListSectionsRequestObject struct {
+	Params ListSectionsParams
+}
+
+type ListSectionsResponseObject interface {
+	VisitListSectionsResponse(w http.ResponseWriter) error
+}
+
+type ListSections200JSONResponse SectionList
+
+func (response ListSections200JSONResponse) VisitListSectionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListSections401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ListSections401JSONResponse) VisitListSectionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListSections403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListSections403JSONResponse) VisitListSectionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListSections500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListSections500JSONResponse) VisitListSectionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSectionRequestObject struct {
+	Body *CreateSectionJSONRequestBody
+}
+
+type CreateSectionResponseObject interface {
+	VisitCreateSectionResponse(w http.ResponseWriter) error
+}
+
+type CreateSection201JSONResponse Section
+
+func (response CreateSection201JSONResponse) VisitCreateSectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSection400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response CreateSection400JSONResponse) VisitCreateSectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSection401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response CreateSection401JSONResponse) VisitCreateSectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSection403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateSection403JSONResponse) VisitCreateSectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSection404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateSection404JSONResponse) VisitCreateSectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSection409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateSection409JSONResponse) VisitCreateSectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSection500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response CreateSection500JSONResponse) VisitCreateSectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ArchiveSectionRequestObject struct {
+	SectionId openapi_types.UUID `json:"sectionId"`
+}
+
+type ArchiveSectionResponseObject interface {
+	VisitArchiveSectionResponse(w http.ResponseWriter) error
+}
+
+type ArchiveSection200JSONResponse Section
+
+func (response ArchiveSection200JSONResponse) VisitArchiveSectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ArchiveSection401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ArchiveSection401JSONResponse) VisitArchiveSectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ArchiveSection403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ArchiveSection403JSONResponse) VisitArchiveSectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ArchiveSection404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ArchiveSection404JSONResponse) VisitArchiveSectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ArchiveSection500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ArchiveSection500JSONResponse) VisitArchiveSectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListSessionsRequestObject struct {
+}
+
+type ListSessionsResponseObject interface {
+	VisitListSessionsResponse(w http.ResponseWriter) error
+}
+
+type ListSessions200JSONResponse AcademicSessionList
+
+func (response ListSessions200JSONResponse) VisitListSessionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListSessions401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ListSessions401JSONResponse) VisitListSessionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListSessions403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListSessions403JSONResponse) VisitListSessionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListSessions500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListSessions500JSONResponse) VisitListSessionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSessionRequestObject struct {
+	Body *CreateSessionJSONRequestBody
+}
+
+type CreateSessionResponseObject interface {
+	VisitCreateSessionResponse(w http.ResponseWriter) error
+}
+
+type CreateSession201JSONResponse AcademicSession
+
+func (response CreateSession201JSONResponse) VisitCreateSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSession400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response CreateSession400JSONResponse) VisitCreateSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSession401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response CreateSession401JSONResponse) VisitCreateSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSession403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateSession403JSONResponse) VisitCreateSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSession409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateSession409JSONResponse) VisitCreateSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSession500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response CreateSession500JSONResponse) VisitCreateSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MakeSessionCurrentRequestObject struct {
+	SessionId openapi_types.UUID `json:"sessionId"`
+}
+
+type MakeSessionCurrentResponseObject interface {
+	VisitMakeSessionCurrentResponse(w http.ResponseWriter) error
+}
+
+type MakeSessionCurrent200JSONResponse AcademicSession
+
+func (response MakeSessionCurrent200JSONResponse) VisitMakeSessionCurrentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MakeSessionCurrent401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response MakeSessionCurrent401JSONResponse) VisitMakeSessionCurrentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MakeSessionCurrent403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response MakeSessionCurrent403JSONResponse) VisitMakeSessionCurrentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MakeSessionCurrent404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response MakeSessionCurrent404JSONResponse) VisitMakeSessionCurrentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MakeSessionCurrent500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response MakeSessionCurrent500JSONResponse) VisitMakeSessionCurrentResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -1021,6 +2231,177 @@ func (response GetStudent500JSONResponse) VisitGetStudentResponse(w http.Respons
 	return err
 }
 
+type ChangeStudentSectionRequestObject struct {
+	StudentId openapi_types.UUID `json:"studentId"`
+	Body      *ChangeStudentSectionJSONRequestBody
+}
+
+type ChangeStudentSectionResponseObject interface {
+	VisitChangeStudentSectionResponse(w http.ResponseWriter) error
+}
+
+type ChangeStudentSection200JSONResponse Student
+
+func (response ChangeStudentSection200JSONResponse) VisitChangeStudentSectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeStudentSection400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response ChangeStudentSection400JSONResponse) VisitChangeStudentSectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeStudentSection401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ChangeStudentSection401JSONResponse) VisitChangeStudentSectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeStudentSection403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ChangeStudentSection403JSONResponse) VisitChangeStudentSectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeStudentSection404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ChangeStudentSection404JSONResponse) VisitChangeStudentSectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeStudentSection500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ChangeStudentSection500JSONResponse) VisitChangeStudentSectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListStudentEnrolmentsRequestObject struct {
+	StudentId openapi_types.UUID `json:"studentId"`
+}
+
+type ListStudentEnrolmentsResponseObject interface {
+	VisitListStudentEnrolmentsResponse(w http.ResponseWriter) error
+}
+
+type ListStudentEnrolments200JSONResponse EnrolmentList
+
+func (response ListStudentEnrolments200JSONResponse) VisitListStudentEnrolmentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListStudentEnrolments401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ListStudentEnrolments401JSONResponse) VisitListStudentEnrolmentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListStudentEnrolments403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListStudentEnrolments403JSONResponse) VisitListStudentEnrolmentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListStudentEnrolments404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListStudentEnrolments404JSONResponse) VisitListStudentEnrolmentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListStudentEnrolments500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListStudentEnrolments500JSONResponse) VisitListStudentEnrolmentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CreateTokenRequestObject struct {
 	Body *CreateTokenJSONRequestBody
 }
@@ -1131,6 +2512,33 @@ type StrictServerInterface interface {
 	// VerifyOtp Exchange a one-time code for a session token in one tenant
 	// (POST /api/v1/auth/otp/verify)
 	VerifyOtp(ctx context.Context, request VerifyOtpRequestObject) (VerifyOtpResponseObject, error)
+	// ListClasses List the classes, ordered by grade level
+	// (GET /api/v1/classes)
+	ListClasses(ctx context.Context, request ListClassesRequestObject) (ListClassesResponseObject, error)
+	// CreateClass Create a class (for example Class 5)
+	// (POST /api/v1/classes)
+	CreateClass(ctx context.Context, request CreateClassRequestObject) (CreateClassResponseObject, error)
+	// ArchiveClass Archive a class; it is never deleted
+	// (POST /api/v1/classes/{classId}/archive)
+	ArchiveClass(ctx context.Context, request ArchiveClassRequestObject) (ArchiveClassResponseObject, error)
+	// ListSections List sections, optionally of one class
+	// (GET /api/v1/sections)
+	ListSections(ctx context.Context, request ListSectionsRequestObject) (ListSectionsResponseObject, error)
+	// CreateSection Create a section of a class, in a shift
+	// (POST /api/v1/sections)
+	CreateSection(ctx context.Context, request CreateSectionRequestObject) (CreateSectionResponseObject, error)
+	// ArchiveSection Archive a section; it is never deleted
+	// (POST /api/v1/sections/{sectionId}/archive)
+	ArchiveSection(ctx context.Context, request ArchiveSectionRequestObject) (ArchiveSectionResponseObject, error)
+	// ListSessions List the sessions of the tenant's branch, newest first
+	// (GET /api/v1/sessions)
+	ListSessions(ctx context.Context, request ListSessionsRequestObject) (ListSessionsResponseObject, error)
+	// CreateSession Create an academic session (year)
+	// (POST /api/v1/sessions)
+	CreateSession(ctx context.Context, request CreateSessionRequestObject) (CreateSessionResponseObject, error)
+	// MakeSessionCurrent Make this session the current one
+	// (POST /api/v1/sessions/{sessionId}/make-current)
+	MakeSessionCurrent(ctx context.Context, request MakeSessionCurrentRequestObject) (MakeSessionCurrentResponseObject, error)
 	// ListStudents List students in the caller's tenant (cursor paginated)
 	// (GET /api/v1/students)
 	ListStudents(ctx context.Context, request ListStudentsRequestObject) (ListStudentsResponseObject, error)
@@ -1140,6 +2548,12 @@ type StrictServerInterface interface {
 	// GetStudent Read one student with guardians
 	// (GET /api/v1/students/{studentId})
 	GetStudent(ctx context.Context, request GetStudentRequestObject) (GetStudentResponseObject, error)
+	// ChangeStudentSection Move a student to another section, keeping history
+	// (POST /api/v1/students/{studentId}/change-section)
+	ChangeStudentSection(ctx context.Context, request ChangeStudentSectionRequestObject) (ChangeStudentSectionResponseObject, error)
+	// ListStudentEnrolments The enrolment history of one student, newest first
+	// (GET /api/v1/students/{studentId}/enrolments)
+	ListStudentEnrolments(ctx context.Context, request ListStudentEnrolmentsRequestObject) (ListStudentEnrolmentsResponseObject, error)
 	// CreateToken Create a personal access token for scripts and terminal use
 	// (POST /api/v1/tokens)
 	CreateToken(ctx context.Context, request CreateTokenRequestObject) (CreateTokenResponseObject, error)
@@ -1249,6 +2663,251 @@ func (sh *strictHandler) VerifyOtp(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// ListClasses operation middleware
+func (sh *strictHandler) ListClasses(w http.ResponseWriter, r *http.Request) {
+	var request ListClassesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListClasses(ctx, request.(ListClassesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListClasses")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListClassesResponseObject); ok {
+		if err := validResponse.VisitListClassesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateClass operation middleware
+func (sh *strictHandler) CreateClass(w http.ResponseWriter, r *http.Request) {
+	var request CreateClassRequestObject
+
+	var body CreateClassJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateClass(ctx, request.(CreateClassRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateClass")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateClassResponseObject); ok {
+		if err := validResponse.VisitCreateClassResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ArchiveClass operation middleware
+func (sh *strictHandler) ArchiveClass(w http.ResponseWriter, r *http.Request, classId openapi_types.UUID) {
+	var request ArchiveClassRequestObject
+
+	request.ClassId = classId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ArchiveClass(ctx, request.(ArchiveClassRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ArchiveClass")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ArchiveClassResponseObject); ok {
+		if err := validResponse.VisitArchiveClassResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListSections operation middleware
+func (sh *strictHandler) ListSections(w http.ResponseWriter, r *http.Request, params ListSectionsParams) {
+	var request ListSectionsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListSections(ctx, request.(ListSectionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListSections")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListSectionsResponseObject); ok {
+		if err := validResponse.VisitListSectionsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateSection operation middleware
+func (sh *strictHandler) CreateSection(w http.ResponseWriter, r *http.Request) {
+	var request CreateSectionRequestObject
+
+	var body CreateSectionJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateSection(ctx, request.(CreateSectionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateSection")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateSectionResponseObject); ok {
+		if err := validResponse.VisitCreateSectionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ArchiveSection operation middleware
+func (sh *strictHandler) ArchiveSection(w http.ResponseWriter, r *http.Request, sectionId openapi_types.UUID) {
+	var request ArchiveSectionRequestObject
+
+	request.SectionId = sectionId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ArchiveSection(ctx, request.(ArchiveSectionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ArchiveSection")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ArchiveSectionResponseObject); ok {
+		if err := validResponse.VisitArchiveSectionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListSessions operation middleware
+func (sh *strictHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
+	var request ListSessionsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListSessions(ctx, request.(ListSessionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListSessions")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListSessionsResponseObject); ok {
+		if err := validResponse.VisitListSessionsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateSession operation middleware
+func (sh *strictHandler) CreateSession(w http.ResponseWriter, r *http.Request) {
+	var request CreateSessionRequestObject
+
+	var body CreateSessionJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateSession(ctx, request.(CreateSessionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateSession")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateSessionResponseObject); ok {
+		if err := validResponse.VisitCreateSessionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// MakeSessionCurrent operation middleware
+func (sh *strictHandler) MakeSessionCurrent(w http.ResponseWriter, r *http.Request, sessionId openapi_types.UUID) {
+	var request MakeSessionCurrentRequestObject
+
+	request.SessionId = sessionId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.MakeSessionCurrent(ctx, request.(MakeSessionCurrentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "MakeSessionCurrent")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(MakeSessionCurrentResponseObject); ok {
+		if err := validResponse.VisitMakeSessionCurrentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListStudents operation middleware
 func (sh *strictHandler) ListStudents(w http.ResponseWriter, r *http.Request, params ListStudentsParams) {
 	var request ListStudentsRequestObject
@@ -1325,6 +2984,65 @@ func (sh *strictHandler) GetStudent(w http.ResponseWriter, r *http.Request, stud
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetStudentResponseObject); ok {
 		if err := validResponse.VisitGetStudentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ChangeStudentSection operation middleware
+func (sh *strictHandler) ChangeStudentSection(w http.ResponseWriter, r *http.Request, studentId openapi_types.UUID) {
+	var request ChangeStudentSectionRequestObject
+
+	request.StudentId = studentId
+
+	var body ChangeStudentSectionJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ChangeStudentSection(ctx, request.(ChangeStudentSectionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ChangeStudentSection")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ChangeStudentSectionResponseObject); ok {
+		if err := validResponse.VisitChangeStudentSectionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListStudentEnrolments operation middleware
+func (sh *strictHandler) ListStudentEnrolments(w http.ResponseWriter, r *http.Request, studentId openapi_types.UUID) {
+	var request ListStudentEnrolmentsRequestObject
+
+	request.StudentId = studentId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListStudentEnrolments(ctx, request.(ListStudentEnrolmentsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListStudentEnrolments")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListStudentEnrolmentsResponseObject); ok {
+		if err := validResponse.VisitListStudentEnrolmentsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

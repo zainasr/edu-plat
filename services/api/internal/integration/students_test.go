@@ -9,9 +9,9 @@ import (
 )
 
 // enrolWith is an enrolment whose single primary guardian has the given mobile.
-func enrolWith(t *testing.T, childName, guardianMobile string) students.StudentInput {
+func enrolWith(t *testing.T, sectionID, childName, guardianMobile string) students.StudentInput {
 	t.Helper()
-	in := enrolInput(t)
+	in := enrolInput(t, sectionID)
 	in.FullName = childName
 	in.Guardians[0].Mobile = guardianMobile
 	return in
@@ -24,14 +24,15 @@ func TestREQ_STU_004_KnownGuardianJoinsTheirFamily(t *testing.T) {
 	ctx := context.Background()
 	slug, mobile, _ := newTenant(t, f, "family")
 	p := principalFor(t, f, slug, mobile)
-	svc := students.NewService(f.app)
+	sec := newStructure(t, f, p).SectionID
+	svc := f.students
 
 	shared := newMobile(t)
-	first, err := svc.Create(ctx, p, enrolWith(t, "Ali Khan", shared))
+	first, err := svc.Create(ctx, p, enrolWith(t, sec, "Ali Khan", shared))
 	if err != nil {
 		t.Fatalf("first child: %v", err)
 	}
-	second, err := svc.Create(ctx, p, enrolWith(t, "Bilal Khan", shared))
+	second, err := svc.Create(ctx, p, enrolWith(t, sec, "Bilal Khan", shared))
 	if err != nil {
 		t.Fatalf("second child: %v", err)
 	}
@@ -54,17 +55,18 @@ func TestREQ_STU_004_GuardiansFromTwoFamiliesAreRejected(t *testing.T) {
 	ctx := context.Background()
 	slug, mobile, _ := newTenant(t, f, "conflict")
 	p := principalFor(t, f, slug, mobile)
-	svc := students.NewService(f.app)
+	sec := newStructure(t, f, p).SectionID
+	svc := f.students
 
 	m1, m2 := newMobile(t), newMobile(t)
-	if _, err := svc.Create(ctx, p, enrolWith(t, "Child One", m1)); err != nil {
+	if _, err := svc.Create(ctx, p, enrolWith(t, sec, "Child One", m1)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.Create(ctx, p, enrolWith(t, "Child Two", m2)); err != nil {
+	if _, err := svc.Create(ctx, p, enrolWith(t, sec, "Child Two", m2)); err != nil {
 		t.Fatal(err)
 	}
 
-	mixed := enrolWith(t, "Child Three", m1)
+	mixed := enrolWith(t, sec, "Child Three", m1)
 	mixed.Guardians = append(mixed.Guardians, students.GuardianInput{
 		FullName: "Other Family Aunt", Mobile: m2, Relationship: "aunt",
 	})
@@ -80,13 +82,14 @@ func TestREQ_STU_003_RegistrationNumbersAreUniqueUnderConcurrency(t *testing.T) 
 	ctx := context.Background()
 	slug, mobile, _ := newTenant(t, f, "concurrent")
 	p := principalFor(t, f, slug, mobile)
-	svc := students.NewService(f.app)
+	sec := newStructure(t, f, p).SectionID
+	svc := f.students
 
 	const n = 10
 	// Build inputs on the test goroutine: t.Fatal must not be called from other goroutines.
 	inputs := make([]students.StudentInput, n)
 	for i := range inputs {
-		inputs[i] = enrolInput(t)
+		inputs[i] = enrolInput(t, sec)
 	}
 
 	type result struct {
@@ -127,13 +130,15 @@ func TestREQ_STU_003_CountersArePerTenant(t *testing.T) {
 	slugB, mobileB, _ := newTenant(t, f, "counter-b")
 	pA := principalFor(t, f, slugA, mobileA)
 	pB := principalFor(t, f, slugB, mobileB)
-	svc := students.NewService(f.app)
+	secA := newStructure(t, f, pA).SectionID
+	secB := newStructure(t, f, pB).SectionID
+	svc := f.students
 
-	a, err := svc.Create(ctx, pA, enrolInput(t))
+	a, err := svc.Create(ctx, pA, enrolInput(t, secA))
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := svc.Create(ctx, pB, enrolInput(t))
+	b, err := svc.Create(ctx, pB, enrolInput(t, secB))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,11 +157,12 @@ func TestREQ_API_CursorPaginationWalksAllRowsOnce(t *testing.T) {
 	ctx := context.Background()
 	slug, mobile, _ := newTenant(t, f, "pages")
 	p := principalFor(t, f, slug, mobile)
-	svc := students.NewService(f.app)
+	sec := newStructure(t, f, p).SectionID
+	svc := f.students
 
 	var created []string
 	for range 3 {
-		st, err := svc.Create(ctx, p, enrolInput(t))
+		st, err := svc.Create(ctx, p, enrolInput(t, sec))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -189,7 +195,7 @@ func TestREQ_API_BadPagingInputsAreRejected(t *testing.T) {
 	ctx := context.Background()
 	slug, mobile, _ := newTenant(t, f, "badpaging")
 	p := principalFor(t, f, slug, mobile)
-	svc := students.NewService(f.app)
+	svc := f.students
 
 	_, err := svc.List(ctx, p, 2, "not-a-cursor!")
 	if got := errCode(t, err); got != "students.cursor_invalid" {

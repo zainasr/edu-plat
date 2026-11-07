@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/zainasr/edu-plat/services/api/internal/api"
-	"github.com/zainasr/edu-plat/services/api/internal/students"
 )
 
 // do sends one request through the full handler, as curl would.
@@ -33,7 +32,7 @@ func TestUS_IAM_004_TokenCreatesAndReadsStudentOverHTTP(t *testing.T) {
 	slug, mobile, tenantID := newTenant(t, f, "http")
 	otherSlug, otherMobile, _ := newTenant(t, f, "other")
 
-	h := api.Handler(api.NewServer(f.iam, students.NewService(f.app)), f.iam)
+	h := api.Handler(api.NewServer(f.iam, f.org, f.students), f.iam)
 
 	// 1. Request and verify an OTP over HTTP.
 	if rec := do(t, h, http.MethodPost, "/api/v1/auth/otp/request", "", `{"mobile":"`+mobile+`"}`); rec.Code != http.StatusAccepted {
@@ -67,8 +66,33 @@ func TestUS_IAM_004_TokenCreatesAndReadsStudentOverHTTP(t *testing.T) {
 	}
 	mustJSON(t, rec.Body.Bytes(), &pat)
 
-	// 3. Enrol a student with the token.
+	// 3a. Set up the school's structure with the token: a session, a class, a section.
+	rec = do(t, h, http.MethodPost, "/api/v1/sessions", pat.Token,
+		`{"name":"2026-27","starts_on":"2026-04-01","ends_on":"2027-03-31"}`)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create session: %d %s", rec.Code, rec.Body)
+	}
+	rec = do(t, h, http.MethodPost, "/api/v1/classes", pat.Token, `{"name":"Class 5","grade_level":5}`)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create class: %d %s", rec.Code, rec.Body)
+	}
+	var class struct {
+		ID string `json:"id"`
+	}
+	mustJSON(t, rec.Body.Bytes(), &class)
+	rec = do(t, h, http.MethodPost, "/api/v1/sections", pat.Token,
+		`{"class_id":"`+class.ID+`","name":"A","shift":"morning"}`)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create section: %d %s", rec.Code, rec.Body)
+	}
+	var section struct {
+		ID string `json:"id"`
+	}
+	mustJSON(t, rec.Body.Bytes(), &section)
+
+	// 3b. Enrol a student into that section with the token.
 	body := `{
+		"section_id": "` + section.ID + `",
 		"full_name": "Ali Khan",
 		"father_name": "Imran Khan",
 		"gender": "male",
@@ -90,8 +114,20 @@ func TestUS_IAM_004_TokenCreatesAndReadsStudentOverHTTP(t *testing.T) {
 			Primary  bool `json:"primary"`
 			FeePayer bool `json:"fee_payer"`
 		} `json:"guardians"`
+		Enrolment struct {
+			SectionName string `json:"section_name"`
+			ClassName   string `json:"class_name"`
+			Shift       string `json:"shift"`
+			SessionName string `json:"session_name"`
+			Status      string `json:"status"`
+		} `json:"enrolment"`
 	}
 	mustJSON(t, rec.Body.Bytes(), &created)
+	if created.Enrolment.ClassName != "Class 5" || created.Enrolment.SectionName != "A" ||
+		created.Enrolment.Shift != "morning" || created.Enrolment.SessionName != "2026-27" ||
+		created.Enrolment.Status != "active" {
+		t.Fatalf("the student should be enrolled in 5-A morning, 2026-27: %s", rec.Body)
+	}
 	if created.RegistrationNo == "" || created.Family.Number == "" {
 		t.Fatalf("registration and family numbers are missing: %s", rec.Body)
 	}

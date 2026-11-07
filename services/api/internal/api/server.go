@@ -12,6 +12,7 @@ import (
 
 	"github.com/zainasr/edu-plat/services/api/internal/api/gen"
 	"github.com/zainasr/edu-plat/services/api/internal/iam"
+	"github.com/zainasr/edu-plat/services/api/internal/org"
 	"github.com/zainasr/edu-plat/services/api/internal/platform/apperr"
 	"github.com/zainasr/edu-plat/services/api/internal/students"
 )
@@ -19,12 +20,13 @@ import (
 // Server implements gen.StrictServerInterface.
 type Server struct {
 	iam      *iam.Service
+	org      *org.Service
 	students *students.Service
 }
 
 // NewServer wires the services into the HTTP handlers.
-func NewServer(identity *iam.Service, enrolment *students.Service) *Server {
-	return &Server{iam: identity, students: enrolment}
+func NewServer(identity *iam.Service, structure *org.Service, enrolment *students.Service) *Server {
+	return &Server{iam: identity, org: structure, students: enrolment}
 }
 
 // GetHealth reports that the process is up. Readiness checks (database, queue)
@@ -104,6 +106,7 @@ func (s *Server) CreateStudent(ctx context.Context, req gen.CreateStudentRequest
 		return nil, apperr.Validation("request.body_required", "A JSON body is required.")
 	}
 	in := students.StudentInput{
+		SectionID:   req.Body.SectionId.String(),
 		FullName:    req.Body.FullName,
 		FatherName:  req.Body.FatherName,
 		Gender:      string(req.Body.Gender),
@@ -219,6 +222,14 @@ func toAPIStudent(st students.Student) (gen.Student, error) {
 			Access:                gen.GuardianAccess(g.Access),
 		})
 	}
+	var enrolment *gen.Enrolment
+	if st.Enrolment != nil {
+		e, err := toAPIEnrolment(*st.Enrolment)
+		if err != nil {
+			return gen.Student{}, err
+		}
+		enrolment = &e
+	}
 	return gen.Student{
 		Id:             id,
 		RegistrationNo: st.RegistrationNo,
@@ -232,6 +243,7 @@ func toAPIStudent(st students.Student) (gen.Student, error) {
 			Number string            `json:"number"`
 		}{Id: familyID, Number: st.FamilyNumber},
 		Guardians: guardians,
+		Enrolment: enrolment,
 		CreatedAt: st.CreatedAt,
 	}, nil
 }

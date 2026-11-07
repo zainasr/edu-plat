@@ -63,3 +63,29 @@ FROM guardian_links l
 JOIN guardians g ON g.tenant_id = l.tenant_id AND g.id = l.guardian_id
 WHERE l.tenant_id = sqlc.arg('tenant_id') AND l.student_id = ANY(sqlc.arg('student_ids')::uuid[])
 ORDER BY l.is_primary DESC, g.full_name;
+
+-- name: InsertEnrolment :one
+INSERT INTO enrolments (tenant_id, student_id, session_id, section_id, started_on, created_by)
+VALUES (sqlc.arg('tenant_id'), sqlc.arg('student_id'), sqlc.arg('session_id'), sqlc.arg('section_id'),
+        sqlc.arg('started_on'), sqlc.arg('created_by'))
+RETURNING id;
+
+-- name: CloseEnrolment :execrows
+-- Conditional: only an active enrolment can be closed, so a double move cannot close it twice.
+UPDATE enrolments
+SET status = 'closed', ended_on = sqlc.arg('ended_on'), reason = sqlc.arg('reason')
+WHERE tenant_id = sqlc.arg('tenant_id') AND id = sqlc.arg('id') AND status = 'active';
+
+-- name: ActiveEnrolmentForStudent :one
+SELECT id, session_id, section_id
+FROM enrolments
+WHERE tenant_id = sqlc.arg('tenant_id') AND student_id = sqlc.arg('student_id') AND status = 'active'
+ORDER BY created_at DESC, id DESC
+LIMIT 1;
+
+-- name: ListEnrolmentsForStudents :many
+-- Newest first. For a page of students, the first active row per student is the current enrolment.
+SELECT id, student_id, session_id, section_id, status, started_on, ended_on, reason
+FROM enrolments
+WHERE tenant_id = sqlc.arg('tenant_id') AND student_id = ANY(sqlc.arg('student_ids')::uuid[])
+ORDER BY created_at DESC, id DESC;
