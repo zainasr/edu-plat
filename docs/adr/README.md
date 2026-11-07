@@ -16,5 +16,6 @@ An ADR records one significant technical choice: the context, the options, the d
 | 0010 | Postgres MCP server runs from a pinned Docker image | Accepted |
 | 0011 | Walking-skeleton auth, tenancy and data access | Accepted |
 | 0012 | sqlc for module queries, hand-written pgx for the definer lookups | Accepted |
+| 0013 | Academic structure, the default branch, and cross-module calls inside one transaction | Accepted |
 
 Still to write when reached: token format and sessions, PDF renderer, observability stack, Terraform layout.

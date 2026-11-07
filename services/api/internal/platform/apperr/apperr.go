@@ -47,6 +47,11 @@ func Forbidden(code, message string) *Error {
 	return &Error{Status: http.StatusForbidden, Code: code, Message: message}
 }
 
+// Conflict is a 409 for a request that clashes with existing data, such as a duplicate name.
+func Conflict(code, message string) *Error {
+	return &Error{Status: http.StatusConflict, Code: code, Message: message}
+}
+
 // Locked is a 423, used for OTP lockout (REQ-IAM-010).
 func Locked(code, message string) *Error {
 	return &Error{Status: http.StatusLocked, Code: code, Message: message}

@@ -12,13 +12,20 @@ import (
 const (
 	PermStudentView   = "student.view"
 	PermStudentCreate = "student.create"
+	PermStudentEdit   = "student.edit"
 	PermTokenManage   = "token.manage"
+	PermOrgView       = "org.view"
+	PermOrgManage     = "org.manage"
+	PermSessionManage = "session.manage"
 )
 
 // rolePermissions maps each built-in role to its permissions. Roles are code in the skeleton;
 // assignments are data (role_assignments). Permissions are the union over a membership's roles.
 var rolePermissions = map[string][]string{
-	"owner": {PermStudentView, PermStudentCreate, PermTokenManage},
+	"owner": {
+		PermStudentView, PermStudentCreate, PermStudentEdit, PermTokenManage,
+		PermOrgView, PermOrgManage, PermSessionManage,
+	},
 }
 
 // Principal is who is calling, in which tenant, with which token (REQ-IAM-002, REQ-API-017).
