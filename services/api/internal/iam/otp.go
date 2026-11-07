@@ -17,6 +17,7 @@ import (
 
 	"github.com/zainasr/edu-plat/services/api/internal/iam/store/gen"
 	"github.com/zainasr/edu-plat/services/api/internal/platform/apperr"
+	"github.com/zainasr/edu-plat/services/api/internal/platform/audit"
 	"github.com/zainasr/edu-plat/services/api/internal/platform/db"
 	"github.com/zainasr/edu-plat/services/api/internal/platform/phone"
 )
@@ -185,7 +186,18 @@ func (s *Service) VerifyOTP(ctx context.Context, rawMobile, code, tenantSlug str
 			TenantSlug: tenant.Slug,
 			TenantName: tenant.Name,
 		}
-		return nil
+		// REQ-IAM-020: record the sign-in in the same transaction as the session it created.
+		// The summary holds no code and no full mobile number.
+		return audit.Record(ctx, tx, audit.Entry{
+			TenantID:    tenant.ID,
+			Source:      audit.SourceAPI,
+			ActorUserID: db.UUIDString(user.ID),
+			TokenID:     issued.ID,
+			Action:      "auth.signed_in",
+			Entity:      "session",
+			EntityID:    issued.ID,
+			Summary:     map[string]any{"kind": KindSession, "mobile": phone.Mask(mobile)},
+		})
 	})
 	if err != nil {
 		return Session{}, err
