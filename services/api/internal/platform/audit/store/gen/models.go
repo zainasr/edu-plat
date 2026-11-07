@@ -89,6 +89,31 @@ type Family struct {
 	CreatedBy pgtype.UUID
 }
 
+type FeePlanLine struct {
+	ID            pgtype.UUID
+	TenantID      pgtype.UUID
+	ClassID       pgtype.UUID
+	FeeTypeID     pgtype.UUID
+	Amount        int64
+	Frequency     string
+	EffectiveFrom pgtype.Date
+	Removed       bool
+	CreatedAt     pgtype.Timestamptz
+	CreatedBy     pgtype.UUID
+}
+
+type FeeType struct {
+	ID        pgtype.UUID
+	TenantID  pgtype.UUID
+	Code      string
+	Name      string
+	Kind      string
+	IsDeposit bool
+	Status    string
+	CreatedAt pgtype.Timestamptz
+	CreatedBy pgtype.UUID
+}
+
 type Guardian struct {
 	ID        pgtype.UUID
 	TenantID  pgtype.UUID
@@ -202,6 +227,19 @@ type Student struct {
 	CreatedBy      pgtype.UUID
 	UpdatedAt      pgtype.Timestamptz
 	UpdatedBy      pgtype.UUID
+}
+
+type StudentFeeOverride struct {
+	ID            pgtype.UUID
+	TenantID      pgtype.UUID
+	StudentID     pgtype.UUID
+	FeeTypeID     pgtype.UUID
+	Amount        int64
+	EffectiveFrom pgtype.Date
+	Cleared       bool
+	Reason        string
+	CreatedAt     pgtype.Timestamptz
+	CreatedBy     pgtype.UUID
 }
 
 type Tenant struct {

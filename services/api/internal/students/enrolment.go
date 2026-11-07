@@ -169,6 +169,65 @@ func (s *Service) ListEnrolments(ctx context.Context, p iam.Principal, id string
 	return out, nil
 }
 
+// RequireStudent returns a 404 unless the student exists in the caller's tenant. It runs inside the
+// caller's open tenant transaction and is used by modules that hang data off a student.
+func (s *Service) RequireStudent(ctx context.Context, tx pgx.Tx, tenantID, studentID string) error {
+	notFound := apperr.NotFound("students.not_found", "Student not found.")
+	tenant, err := db.ParseUUID(tenantID)
+	if err != nil {
+		return err
+	}
+	id, err := db.ParseUUID(studentID)
+	if err != nil {
+		return notFound
+	}
+	if _, err := gen.New(tx).GetStudent(ctx, gen.GetStudentParams{TenantID: tenant, ID: id}); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return notFound
+		}
+		return fmt.Errorf("get student: %w", err)
+	}
+	return nil
+}
+
+// CurrentClassID returns the id of the class the student is enrolled in now, inside the caller's
+// open tenant transaction. It is what the fees module asks to find a student's class plan. A student
+// with no active enrolment is a 400 (students.not_enrolled); an unknown student is a 404.
+func (s *Service) CurrentClassID(ctx context.Context, tx pgx.Tx, tenantID, studentID string) (string, error) {
+	tenant, err := db.ParseUUID(tenantID)
+	if err != nil {
+		return "", err
+	}
+	id, err := db.ParseUUID(studentID)
+	if err != nil {
+		return "", apperr.NotFound("students.not_found", "Student not found.")
+	}
+	q := gen.New(tx)
+	if _, err := q.GetStudent(ctx, gen.GetStudentParams{TenantID: tenant, ID: id}); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", apperr.NotFound("students.not_found", "Student not found.")
+		}
+		return "", fmt.Errorf("get student: %w", err)
+	}
+	active, err := q.ActiveEnrolmentForStudent(ctx, gen.ActiveEnrolmentForStudentParams{TenantID: tenant, StudentID: id})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", apperr.Validation("students.not_enrolled", "This student has no current enrolment, so has no class.")
+	}
+	if err != nil {
+		return "", fmt.Errorf("find active enrolment: %w", err)
+	}
+	sectionID := db.UUIDString(active.SectionID)
+	sections, err := s.org.DescribeSections(ctx, tx, tenantID, []string{sectionID})
+	if err != nil {
+		return "", err
+	}
+	section, ok := sections[sectionID]
+	if !ok {
+		return "", fmt.Errorf("enrolment points at section %s, which org cannot find", sectionID)
+	}
+	return section.ClassID, nil
+}
+
 // describeEnrolments loads the enrolments of the given students, newest first per student, and
 // fills in the session and section names by asking the org module. Keyed by student id.
 func (s *Service) describeEnrolments(ctx context.Context, tx pgx.Tx, tenantID string, tenant pgtype.UUID, studentIDs []pgtype.UUID) (map[string][]Enrolment, error) {

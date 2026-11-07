@@ -434,6 +434,36 @@ func (s *Service) ResolveEnrolmentTarget(ctx context.Context, tx pgx.Tx, tenantI
 	}, nil
 }
 
+// DescribeClass returns one class of the caller's branch, or a 404. The caller passes its own open
+// tenant transaction; nothing here writes.
+func (s *Service) DescribeClass(ctx context.Context, tx pgx.Tx, tenantID, classID string) (Class, error) {
+	notFound := apperr.NotFound("org.class_not_found", "Class not found.")
+	tenant, err := db.ParseUUID(tenantID)
+	if err != nil {
+		return Class{}, err
+	}
+	id, err := db.ParseUUID(classID)
+	if err != nil {
+		return Class{}, notFound
+	}
+	q := gen.New(tx)
+	branch, err := q.DefaultBranch(ctx, tenant)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Class{}, notFound
+	}
+	if err != nil {
+		return Class{}, fmt.Errorf("find branch: %w", err)
+	}
+	row, err := q.GetClass(ctx, gen.GetClassParams{TenantID: tenant, BranchID: branch, ID: id})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Class{}, notFound
+	}
+	if err != nil {
+		return Class{}, fmt.Errorf("get class: %w", err)
+	}
+	return Class{ID: db.UUIDString(row.ID), Name: row.Name, GradeLevel: int(row.GradeLevel), Status: row.Status}, nil
+}
+
 // DescribeSections returns the sections for the given ids, keyed by id. Unknown ids are absent.
 func (s *Service) DescribeSections(ctx context.Context, tx pgx.Tx, tenantID string, ids []string) (map[string]Section, error) {
 	tenant, err := db.ParseUUID(tenantID)
