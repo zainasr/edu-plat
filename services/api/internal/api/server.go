@@ -11,6 +11,7 @@ import (
 	openapitypes "github.com/oapi-codegen/runtime/types"
 
 	"github.com/zainasr/edu-plat/services/api/internal/api/gen"
+	"github.com/zainasr/edu-plat/services/api/internal/fees"
 	"github.com/zainasr/edu-plat/services/api/internal/iam"
 	"github.com/zainasr/edu-plat/services/api/internal/ledger"
 	"github.com/zainasr/edu-plat/services/api/internal/org"
@@ -24,11 +25,12 @@ type Server struct {
 	org      *org.Service
 	students *students.Service
 	ledger   *ledger.Service
+	fees     *fees.Service
 }
 
 // NewServer wires the services into the HTTP handlers.
-func NewServer(identity *iam.Service, structure *org.Service, enrolment *students.Service, books *ledger.Service) *Server {
-	return &Server{iam: identity, org: structure, students: enrolment, ledger: books}
+func NewServer(identity *iam.Service, structure *org.Service, enrolment *students.Service, books *ledger.Service, setup *fees.Service) *Server {
+	return &Server{iam: identity, org: structure, students: enrolment, ledger: books, fees: setup}
 }
 
 // GetHealth reports that the process is up. Readiness checks (database, queue)

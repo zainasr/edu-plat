@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/zainasr/edu-plat/services/api/internal/api"
+	"github.com/zainasr/edu-plat/services/api/internal/fees"
 	"github.com/zainasr/edu-plat/services/api/internal/iam"
 	"github.com/zainasr/edu-plat/services/api/internal/ledger"
 	"github.com/zainasr/edu-plat/services/api/internal/org"
@@ -58,9 +59,10 @@ func run() error {
 	structure := org.NewService(pool)
 	enrolment := students.NewService(pool, structure) // students asks org to describe sections
 	books := ledger.NewService(pool)                  // the double-entry core; fee code posts to it
+	setup := fees.NewService(pool, structure, enrolment)
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           api.Handler(api.NewServer(identity, structure, enrolment, books), identity),
+		Handler:           api.Handler(api.NewServer(identity, structure, enrolment, books, setup), identity),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

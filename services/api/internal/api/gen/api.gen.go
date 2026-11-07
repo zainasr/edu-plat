@@ -54,6 +54,111 @@ func (e EnrolmentStatus) Valid() bool {
 	}
 }
 
+// Defines values for FeeFrequency.
+const (
+	FeeFrequencyAdHoc   FeeFrequency = "ad_hoc"
+	FeeFrequencyAnnual  FeeFrequency = "annual"
+	FeeFrequencyMonthly FeeFrequency = "monthly"
+	FeeFrequencyOneTime FeeFrequency = "one_time"
+)
+
+// Valid indicates whether the value is a known member of the FeeFrequency enum.
+func (e FeeFrequency) Valid() bool {
+	switch e {
+	case FeeFrequencyAdHoc:
+		return true
+	case FeeFrequencyAnnual:
+		return true
+	case FeeFrequencyMonthly:
+		return true
+	case FeeFrequencyOneTime:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for FeeKind.
+const (
+	FeeKindAdmission       FeeKind = "admission"
+	FeeKindAnnual          FeeKind = "annual"
+	FeeKindCustom          FeeKind = "custom"
+	FeeKindFine            FeeKind = "fine"
+	FeeKindLab             FeeKind = "lab"
+	FeeKindLibrary         FeeKind = "library"
+	FeeKindRegistration    FeeKind = "registration"
+	FeeKindSecurityDeposit FeeKind = "security_deposit"
+	FeeKindSports          FeeKind = "sports"
+	FeeKindTransport       FeeKind = "transport"
+	FeeKindTuition         FeeKind = "tuition"
+)
+
+// Valid indicates whether the value is a known member of the FeeKind enum.
+func (e FeeKind) Valid() bool {
+	switch e {
+	case FeeKindAdmission:
+		return true
+	case FeeKindAnnual:
+		return true
+	case FeeKindCustom:
+		return true
+	case FeeKindFine:
+		return true
+	case FeeKindLab:
+		return true
+	case FeeKindLibrary:
+		return true
+	case FeeKindRegistration:
+		return true
+	case FeeKindSecurityDeposit:
+		return true
+	case FeeKindSports:
+		return true
+	case FeeKindTransport:
+		return true
+	case FeeKindTuition:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for FeeLineSource.
+const (
+	Override FeeLineSource = "override"
+	Plan     FeeLineSource = "plan"
+)
+
+// Valid indicates whether the value is a known member of the FeeLineSource enum.
+func (e FeeLineSource) Valid() bool {
+	switch e {
+	case Override:
+		return true
+	case Plan:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for FeeTypeStatus.
+const (
+	FeeTypeStatusActive   FeeTypeStatus = "active"
+	FeeTypeStatusArchived FeeTypeStatus = "archived"
+)
+
+// Valid indicates whether the value is a known member of the FeeTypeStatus enum.
+func (e FeeTypeStatus) Valid() bool {
+	switch e {
+	case FeeTypeStatusActive:
+		return true
+	case FeeTypeStatusArchived:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for Gender.
 const (
 	GenderFemale Gender = "female"
@@ -334,6 +439,105 @@ type ErrorEnvelope struct {
 	} `json:"error"`
 }
 
+// FeeFrequency How often a plan line is charged. Quarterly and term are 1.1 (REQ-FEE-002).
+type FeeFrequency string
+
+// FeeKind What a fee type is for. `security_deposit` is held for the family and is never income (BR-FEE-004).
+type FeeKind string
+
+// FeeLine defines model for FeeLine.
+type FeeLine struct {
+	// Amount An amount in minor units (paisa). Never a decimal or a float (API conventions §2).
+	Amount      Money              `json:"amount"`
+	FeeTypeId   openapi_types.UUID `json:"fee_type_id"`
+	FeeTypeName string             `json:"fee_type_name"`
+
+	// Frequency How often a plan line is charged. Quarterly and term are 1.1 (REQ-FEE-002).
+	Frequency FeeFrequency `json:"frequency"`
+
+	// Kind What a fee type is for. `security_deposit` is held for the family and is never income (BR-FEE-004).
+	Kind FeeKind `json:"kind"`
+
+	// PlanAmount An amount in minor units (paisa). Never a decimal or a float (API conventions §2).
+	PlanAmount Money `json:"plan_amount"`
+
+	// Source Where `amount` came from.
+	Source FeeLineSource `json:"source"`
+}
+
+// FeeLineSource Where `amount` came from.
+type FeeLineSource string
+
+// FeeOverride defines model for FeeOverride.
+type FeeOverride struct {
+	// Amount An amount in minor units (paisa). Never a decimal or a float (API conventions §2).
+	Amount        *Money             `json:"amount,omitempty"`
+	Cleared       bool               `json:"cleared"`
+	CreatedAt     time.Time          `json:"created_at"`
+	EffectiveFrom openapi_types.Date `json:"effective_from"`
+	FeeTypeId     openapi_types.UUID `json:"fee_type_id"`
+	FeeTypeName   string             `json:"fee_type_name"`
+	Reason        string             `json:"reason"`
+}
+
+// FeeOverrideList defines model for FeeOverrideList.
+type FeeOverrideList struct {
+	Items []FeeOverride `json:"items"`
+}
+
+// FeePlan defines model for FeePlan.
+type FeePlan struct {
+	ClassId openapi_types.UUID `json:"class_id"`
+	Lines   []PlanLine         `json:"lines"`
+
+	// Month The first day of the month asked for.
+	Month openapi_types.Date `json:"month"`
+}
+
+// FeeStructure defines model for FeeStructure.
+type FeeStructure struct {
+	ClassId   openapi_types.UUID `json:"class_id"`
+	Lines     []FeeLine          `json:"lines"`
+	Month     openapi_types.Date `json:"month"`
+	StudentId openapi_types.UUID `json:"student_id"`
+}
+
+// FeeType defines model for FeeType.
+type FeeType struct {
+	Code string             `json:"code"`
+	Id   openapi_types.UUID `json:"id"`
+
+	// IsDeposit True only for security deposits.
+	IsDeposit bool `json:"is_deposit"`
+
+	// Kind What a fee type is for. `security_deposit` is held for the family and is never income (BR-FEE-004).
+	Kind   FeeKind       `json:"kind"`
+	Name   string        `json:"name"`
+	Status FeeTypeStatus `json:"status"`
+}
+
+// FeeTypeStatus defines model for FeeType.Status.
+type FeeTypeStatus string
+
+// FeeTypeCreate defines model for FeeTypeCreate.
+type FeeTypeCreate struct {
+	// Code A short stable key, unique in the school.
+	//
+	// Example: lab_fee
+	Code string `json:"code"`
+
+	// Kind What a fee type is for. `security_deposit` is held for the family and is never income (BR-FEE-004).
+	Kind FeeKind `json:"kind"`
+
+	// Name Example: Lab Fee
+	Name string `json:"name"`
+}
+
+// FeeTypeList defines model for FeeTypeList.
+type FeeTypeList struct {
+	Items []FeeType `json:"items"`
+}
+
 // Gender defines model for Gender.
 type Gender string
 
@@ -482,6 +686,57 @@ type OtpVerify struct {
 
 	// TenantSlug Example: demo-school
 	TenantSlug string `json:"tenant_slug"`
+}
+
+// OverrideSet defines model for OverrideSet.
+type OverrideSet struct {
+	// Amount An amount in minor units (paisa). Never a decimal or a float (API conventions §2).
+	Amount *Money `json:"amount,omitempty"`
+
+	// Clear Go back to the class plan amount from that month. No amount is sent.
+	Clear         *bool              `json:"clear,omitempty"`
+	EffectiveFrom openapi_types.Date `json:"effective_from"`
+	FeeTypeId     openapi_types.UUID `json:"fee_type_id"`
+
+	// Reason Example: sibling concession
+	Reason string `json:"reason"`
+}
+
+// PlanLine defines model for PlanLine.
+type PlanLine struct {
+	// Amount An amount in minor units (paisa). Never a decimal or a float (API conventions §2).
+	Amount        *Money             `json:"amount,omitempty"`
+	EffectiveFrom openapi_types.Date `json:"effective_from"`
+	FeeTypeId     openapi_types.UUID `json:"fee_type_id"`
+	FeeTypeName   string             `json:"fee_type_name"`
+
+	// Frequency How often a plan line is charged. Quarterly and term are 1.1 (REQ-FEE-002).
+	Frequency *FeeFrequency `json:"frequency,omitempty"`
+
+	// Kind What a fee type is for. `security_deposit` is held for the family and is never income (BR-FEE-004).
+	Kind    *FeeKind `json:"kind,omitempty"`
+	Removed bool     `json:"removed"`
+}
+
+// PlanLineList defines model for PlanLineList.
+type PlanLineList struct {
+	Items []PlanLine `json:"items"`
+}
+
+// PlanLineSet defines model for PlanLineSet.
+type PlanLineSet struct {
+	// Amount An amount in minor units (paisa). Never a decimal or a float (API conventions §2).
+	Amount *Money `json:"amount,omitempty"`
+
+	// EffectiveFrom Any date in the month the change starts. It is stored as the first of that month.
+	EffectiveFrom openapi_types.Date `json:"effective_from"`
+	FeeTypeId     openapi_types.UUID `json:"fee_type_id"`
+
+	// Frequency How often a plan line is charged. Quarterly and term are 1.1 (REQ-FEE-002).
+	Frequency *FeeFrequency `json:"frequency,omitempty"`
+
+	// Remove Take this fee type off the plan from that month. No amount or frequency is sent.
+	Remove *bool `json:"remove,omitempty"`
 }
 
 // Relationship A guardian's relation to the student (REQ-STU-002).
@@ -662,6 +917,12 @@ type Unauthenticated = ErrorEnvelope
 // ValidationError defines model for ValidationError.
 type ValidationError = ErrorEnvelope
 
+// GetFeePlanParams defines parameters for GetFeePlan.
+type GetFeePlanParams struct {
+	// Month Any date in the month. Defaults to the current month (Asia/Karachi).
+	Month *openapi_types.Date `form:"month,omitempty" json:"month,omitempty"`
+}
+
 // ListJournalEntriesParams defines parameters for ListJournalEntries.
 type ListJournalEntriesParams struct {
 	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
@@ -685,6 +946,12 @@ type ListStudentsParams struct {
 	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 }
 
+// GetFeeStructureParams defines parameters for GetFeeStructure.
+type GetFeeStructureParams struct {
+	// Month Any date in the month. Defaults to the current month (Asia/Karachi).
+	Month *openapi_types.Date `form:"month,omitempty" json:"month,omitempty"`
+}
+
 // RequestOtpJSONRequestBody defines body for RequestOtp for application/json ContentType.
 type RequestOtpJSONRequestBody = OtpRequest
 
@@ -693,6 +960,12 @@ type VerifyOtpJSONRequestBody = OtpVerify
 
 // CreateClassJSONRequestBody defines body for CreateClass for application/json ContentType.
 type CreateClassJSONRequestBody = ClassCreate
+
+// SetFeePlanLineJSONRequestBody defines body for SetFeePlanLine for application/json ContentType.
+type SetFeePlanLineJSONRequestBody = PlanLineSet
+
+// CreateFeeTypeJSONRequestBody defines body for CreateFeeType for application/json ContentType.
+type CreateFeeTypeJSONRequestBody = FeeTypeCreate
 
 // CreateSectionJSONRequestBody defines body for CreateSection for application/json ContentType.
 type CreateSectionJSONRequestBody = SectionCreate
@@ -705,6 +978,9 @@ type CreateStudentJSONRequestBody = StudentCreate
 
 // ChangeStudentSectionJSONRequestBody defines body for ChangeStudentSection for application/json ContentType.
 type ChangeStudentSectionJSONRequestBody = ChangeSection
+
+// SetFeeOverrideJSONRequestBody defines body for SetFeeOverride for application/json ContentType.
+type SetFeeOverrideJSONRequestBody = OverrideSet
 
 // CreateTokenJSONRequestBody defines body for CreateToken for application/json ContentType.
 type CreateTokenJSONRequestBody = TokenCreate
@@ -729,6 +1005,24 @@ type ServerInterface interface {
 	// ArchiveClass Archive a class; it is never deleted
 	// (POST /api/v1/classes/{classId}/archive)
 	ArchiveClass(w http.ResponseWriter, r *http.Request, classId openapi_types.UUID)
+	// GetFeePlan The class plan as it stands in a month
+	// (GET /api/v1/fee-plans/{classId})
+	GetFeePlan(w http.ResponseWriter, r *http.Request, classId openapi_types.UUID, params GetFeePlanParams)
+	// GetFeePlanHistory Every version ever set on a class plan, newest first
+	// (GET /api/v1/fee-plans/{classId}/history)
+	GetFeePlanHistory(w http.ResponseWriter, r *http.Request, classId openapi_types.UUID)
+	// SetFeePlanLine Set (or remove) one fee type on a class plan, from a month
+	// (POST /api/v1/fee-plans/{classId}/lines)
+	SetFeePlanLine(w http.ResponseWriter, r *http.Request, classId openapi_types.UUID)
+	// ListFeeTypes List fee types, creating the suggested set the first time
+	// (GET /api/v1/fee-types)
+	ListFeeTypes(w http.ResponseWriter, r *http.Request)
+	// CreateFeeType Add a fee type (a head such as Tuition or Transport)
+	// (POST /api/v1/fee-types)
+	CreateFeeType(w http.ResponseWriter, r *http.Request)
+	// ArchiveFeeType Archive a fee type
+	// (POST /api/v1/fee-types/{feeTypeId}/archive)
+	ArchiveFeeType(w http.ResponseWriter, r *http.Request, feeTypeId openapi_types.UUID)
 	// ListJournalEntries List journal entries, newest first
 	// (GET /api/v1/journal-entries)
 	ListJournalEntries(w http.ResponseWriter, r *http.Request, params ListJournalEntriesParams)
@@ -771,6 +1065,15 @@ type ServerInterface interface {
 	// ListStudentEnrolments The enrolment history of one student, newest first
 	// (GET /api/v1/students/{studentId}/enrolments)
 	ListStudentEnrolments(w http.ResponseWriter, r *http.Request, studentId openapi_types.UUID)
+	// ListFeeOverrides Every override version set for a student, newest first
+	// (GET /api/v1/students/{studentId}/fee-overrides)
+	ListFeeOverrides(w http.ResponseWriter, r *http.Request, studentId openapi_types.UUID)
+	// SetFeeOverride Set (or clear) one student's amount for a fee type, from a month
+	// (POST /api/v1/students/{studentId}/fee-overrides)
+	SetFeeOverride(w http.ResponseWriter, r *http.Request, studentId openapi_types.UUID)
+	// GetFeeStructure What this student is charged for a month
+	// (GET /api/v1/students/{studentId}/fee-structure)
+	GetFeeStructure(w http.ResponseWriter, r *http.Request, studentId openapi_types.UUID, params GetFeeStructureParams)
 	// CreateToken Create a personal access token for scripts and terminal use
 	// (POST /api/v1/tokens)
 	CreateToken(w http.ResponseWriter, r *http.Request)
@@ -875,6 +1178,154 @@ func (siw *ServerInterfaceWrapper) ArchiveClass(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ArchiveClass(w, r, classId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetFeePlan operation middleware
+func (siw *ServerInterfaceWrapper) GetFeePlan(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "classId" -------------
+	var classId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "classId", r.PathValue("classId"), &classId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "classId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetFeePlanParams
+
+	// ------------- Optional query parameter "month" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "month", r.URL.Query(), &params.Month, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "month"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "month", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetFeePlan(w, r, classId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetFeePlanHistory operation middleware
+func (siw *ServerInterfaceWrapper) GetFeePlanHistory(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "classId" -------------
+	var classId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "classId", r.PathValue("classId"), &classId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "classId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetFeePlanHistory(w, r, classId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetFeePlanLine operation middleware
+func (siw *ServerInterfaceWrapper) SetFeePlanLine(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "classId" -------------
+	var classId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "classId", r.PathValue("classId"), &classId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "classId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetFeePlanLine(w, r, classId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListFeeTypes operation middleware
+func (siw *ServerInterfaceWrapper) ListFeeTypes(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListFeeTypes(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateFeeType operation middleware
+func (siw *ServerInterfaceWrapper) CreateFeeType(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateFeeType(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ArchiveFeeType operation middleware
+func (siw *ServerInterfaceWrapper) ArchiveFeeType(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "feeTypeId" -------------
+	var feeTypeId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "feeTypeId", r.PathValue("feeTypeId"), &feeTypeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "feeTypeId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ArchiveFeeType(w, r, feeTypeId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1254,6 +1705,100 @@ func (siw *ServerInterfaceWrapper) ListStudentEnrolments(w http.ResponseWriter, 
 	handler.ServeHTTP(w, r)
 }
 
+// ListFeeOverrides operation middleware
+func (siw *ServerInterfaceWrapper) ListFeeOverrides(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "studentId" -------------
+	var studentId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "studentId", r.PathValue("studentId"), &studentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "studentId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListFeeOverrides(w, r, studentId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetFeeOverride operation middleware
+func (siw *ServerInterfaceWrapper) SetFeeOverride(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "studentId" -------------
+	var studentId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "studentId", r.PathValue("studentId"), &studentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "studentId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetFeeOverride(w, r, studentId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetFeeStructure operation middleware
+func (siw *ServerInterfaceWrapper) GetFeeStructure(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "studentId" -------------
+	var studentId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "studentId", r.PathValue("studentId"), &studentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "studentId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetFeeStructureParams
+
+	// ------------- Optional query parameter "month" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "month", r.URL.Query(), &params.Month, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "month"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "month", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetFeeStructure(w, r, studentId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // CreateToken operation middleware
 func (siw *ServerInterfaceWrapper) CreateToken(w http.ResponseWriter, r *http.Request) {
 
@@ -1424,6 +1969,15 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/journal-entries", wrapper.ListJournalEntries)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/journal-entries/{entryId}", wrapper.GetJournalEntry)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/reports/trial-balance", wrapper.GetTrialBalance)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/fee-types", wrapper.ListFeeTypes)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/fee-types", wrapper.CreateFeeType)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/fee-types/{feeTypeId}/archive", wrapper.ArchiveFeeType)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/fee-plans/{classId}/lines", wrapper.SetFeePlanLine)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/fee-plans/{classId}", wrapper.GetFeePlan)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/fee-plans/{classId}/history", wrapper.GetFeePlanHistory)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/students/{studentId}/fee-overrides", wrapper.ListFeeOverrides)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/students/{studentId}/fee-overrides", wrapper.SetFeeOverride)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/students/{studentId}/fee-structure", wrapper.GetFeeStructure)
 
 	return m
 }
@@ -1857,6 +2411,517 @@ func (response ArchiveClass404JSONResponse) VisitArchiveClassResponse(w http.Res
 type ArchiveClass500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response ArchiveClass500JSONResponse) VisitArchiveClassResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetFeePlanRequestObject struct {
+	ClassId openapi_types.UUID `json:"classId"`
+	Params  GetFeePlanParams
+}
+
+type GetFeePlanResponseObject interface {
+	VisitGetFeePlanResponse(w http.ResponseWriter) error
+}
+
+type GetFeePlan200JSONResponse FeePlan
+
+func (response GetFeePlan200JSONResponse) VisitGetFeePlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetFeePlan400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response GetFeePlan400JSONResponse) VisitGetFeePlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetFeePlan401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response GetFeePlan401JSONResponse) VisitGetFeePlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetFeePlan403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetFeePlan403JSONResponse) VisitGetFeePlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetFeePlan404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetFeePlan404JSONResponse) VisitGetFeePlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetFeePlan500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GetFeePlan500JSONResponse) VisitGetFeePlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetFeePlanHistoryRequestObject struct {
+	ClassId openapi_types.UUID `json:"classId"`
+}
+
+type GetFeePlanHistoryResponseObject interface {
+	VisitGetFeePlanHistoryResponse(w http.ResponseWriter) error
+}
+
+type GetFeePlanHistory200JSONResponse PlanLineList
+
+func (response GetFeePlanHistory200JSONResponse) VisitGetFeePlanHistoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetFeePlanHistory401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response GetFeePlanHistory401JSONResponse) VisitGetFeePlanHistoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetFeePlanHistory403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetFeePlanHistory403JSONResponse) VisitGetFeePlanHistoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetFeePlanHistory404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetFeePlanHistory404JSONResponse) VisitGetFeePlanHistoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetFeePlanHistory500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GetFeePlanHistory500JSONResponse) VisitGetFeePlanHistoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetFeePlanLineRequestObject struct {
+	ClassId openapi_types.UUID `json:"classId"`
+	Body    *SetFeePlanLineJSONRequestBody
+}
+
+type SetFeePlanLineResponseObject interface {
+	VisitSetFeePlanLineResponse(w http.ResponseWriter) error
+}
+
+type SetFeePlanLine201JSONResponse PlanLine
+
+func (response SetFeePlanLine201JSONResponse) VisitSetFeePlanLineResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetFeePlanLine400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response SetFeePlanLine400JSONResponse) VisitSetFeePlanLineResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetFeePlanLine401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response SetFeePlanLine401JSONResponse) VisitSetFeePlanLineResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetFeePlanLine403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response SetFeePlanLine403JSONResponse) VisitSetFeePlanLineResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetFeePlanLine404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response SetFeePlanLine404JSONResponse) VisitSetFeePlanLineResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetFeePlanLine409JSONResponse struct{ ConflictJSONResponse }
+
+func (response SetFeePlanLine409JSONResponse) VisitSetFeePlanLineResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetFeePlanLine500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response SetFeePlanLine500JSONResponse) VisitSetFeePlanLineResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListFeeTypesRequestObject struct {
+}
+
+type ListFeeTypesResponseObject interface {
+	VisitListFeeTypesResponse(w http.ResponseWriter) error
+}
+
+type ListFeeTypes200JSONResponse FeeTypeList
+
+func (response ListFeeTypes200JSONResponse) VisitListFeeTypesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListFeeTypes401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ListFeeTypes401JSONResponse) VisitListFeeTypesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListFeeTypes403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListFeeTypes403JSONResponse) VisitListFeeTypesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListFeeTypes500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListFeeTypes500JSONResponse) VisitListFeeTypesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateFeeTypeRequestObject struct {
+	Body *CreateFeeTypeJSONRequestBody
+}
+
+type CreateFeeTypeResponseObject interface {
+	VisitCreateFeeTypeResponse(w http.ResponseWriter) error
+}
+
+type CreateFeeType201JSONResponse FeeType
+
+func (response CreateFeeType201JSONResponse) VisitCreateFeeTypeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateFeeType400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response CreateFeeType400JSONResponse) VisitCreateFeeTypeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateFeeType401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response CreateFeeType401JSONResponse) VisitCreateFeeTypeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateFeeType403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateFeeType403JSONResponse) VisitCreateFeeTypeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateFeeType409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateFeeType409JSONResponse) VisitCreateFeeTypeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateFeeType500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response CreateFeeType500JSONResponse) VisitCreateFeeTypeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ArchiveFeeTypeRequestObject struct {
+	FeeTypeId openapi_types.UUID `json:"feeTypeId"`
+}
+
+type ArchiveFeeTypeResponseObject interface {
+	VisitArchiveFeeTypeResponse(w http.ResponseWriter) error
+}
+
+type ArchiveFeeType200JSONResponse FeeType
+
+func (response ArchiveFeeType200JSONResponse) VisitArchiveFeeTypeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ArchiveFeeType401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ArchiveFeeType401JSONResponse) VisitArchiveFeeTypeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ArchiveFeeType403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ArchiveFeeType403JSONResponse) VisitArchiveFeeTypeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ArchiveFeeType404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ArchiveFeeType404JSONResponse) VisitArchiveFeeTypeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ArchiveFeeType500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ArchiveFeeType500JSONResponse) VisitArchiveFeeTypeResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -2974,6 +4039,284 @@ func (response ListStudentEnrolments500JSONResponse) VisitListStudentEnrolmentsR
 	return err
 }
 
+type ListFeeOverridesRequestObject struct {
+	StudentId openapi_types.UUID `json:"studentId"`
+}
+
+type ListFeeOverridesResponseObject interface {
+	VisitListFeeOverridesResponse(w http.ResponseWriter) error
+}
+
+type ListFeeOverrides200JSONResponse FeeOverrideList
+
+func (response ListFeeOverrides200JSONResponse) VisitListFeeOverridesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListFeeOverrides401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ListFeeOverrides401JSONResponse) VisitListFeeOverridesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListFeeOverrides403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListFeeOverrides403JSONResponse) VisitListFeeOverridesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListFeeOverrides404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListFeeOverrides404JSONResponse) VisitListFeeOverridesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListFeeOverrides500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListFeeOverrides500JSONResponse) VisitListFeeOverridesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetFeeOverrideRequestObject struct {
+	StudentId openapi_types.UUID `json:"studentId"`
+	Body      *SetFeeOverrideJSONRequestBody
+}
+
+type SetFeeOverrideResponseObject interface {
+	VisitSetFeeOverrideResponse(w http.ResponseWriter) error
+}
+
+type SetFeeOverride201JSONResponse FeeOverride
+
+func (response SetFeeOverride201JSONResponse) VisitSetFeeOverrideResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetFeeOverride400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response SetFeeOverride400JSONResponse) VisitSetFeeOverrideResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetFeeOverride401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response SetFeeOverride401JSONResponse) VisitSetFeeOverrideResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetFeeOverride403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response SetFeeOverride403JSONResponse) VisitSetFeeOverrideResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetFeeOverride404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response SetFeeOverride404JSONResponse) VisitSetFeeOverrideResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetFeeOverride409JSONResponse struct{ ConflictJSONResponse }
+
+func (response SetFeeOverride409JSONResponse) VisitSetFeeOverrideResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetFeeOverride500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response SetFeeOverride500JSONResponse) VisitSetFeeOverrideResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetFeeStructureRequestObject struct {
+	StudentId openapi_types.UUID `json:"studentId"`
+	Params    GetFeeStructureParams
+}
+
+type GetFeeStructureResponseObject interface {
+	VisitGetFeeStructureResponse(w http.ResponseWriter) error
+}
+
+type GetFeeStructure200JSONResponse FeeStructure
+
+func (response GetFeeStructure200JSONResponse) VisitGetFeeStructureResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetFeeStructure400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response GetFeeStructure400JSONResponse) VisitGetFeeStructureResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetFeeStructure401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response GetFeeStructure401JSONResponse) VisitGetFeeStructureResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetFeeStructure403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetFeeStructure403JSONResponse) VisitGetFeeStructureResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetFeeStructure404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetFeeStructure404JSONResponse) VisitGetFeeStructureResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetFeeStructure500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GetFeeStructure500JSONResponse) VisitGetFeeStructureResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CreateTokenRequestObject struct {
 	Body *CreateTokenJSONRequestBody
 }
@@ -3096,6 +4439,24 @@ type StrictServerInterface interface {
 	// ArchiveClass Archive a class; it is never deleted
 	// (POST /api/v1/classes/{classId}/archive)
 	ArchiveClass(ctx context.Context, request ArchiveClassRequestObject) (ArchiveClassResponseObject, error)
+	// GetFeePlan The class plan as it stands in a month
+	// (GET /api/v1/fee-plans/{classId})
+	GetFeePlan(ctx context.Context, request GetFeePlanRequestObject) (GetFeePlanResponseObject, error)
+	// GetFeePlanHistory Every version ever set on a class plan, newest first
+	// (GET /api/v1/fee-plans/{classId}/history)
+	GetFeePlanHistory(ctx context.Context, request GetFeePlanHistoryRequestObject) (GetFeePlanHistoryResponseObject, error)
+	// SetFeePlanLine Set (or remove) one fee type on a class plan, from a month
+	// (POST /api/v1/fee-plans/{classId}/lines)
+	SetFeePlanLine(ctx context.Context, request SetFeePlanLineRequestObject) (SetFeePlanLineResponseObject, error)
+	// ListFeeTypes List fee types, creating the suggested set the first time
+	// (GET /api/v1/fee-types)
+	ListFeeTypes(ctx context.Context, request ListFeeTypesRequestObject) (ListFeeTypesResponseObject, error)
+	// CreateFeeType Add a fee type (a head such as Tuition or Transport)
+	// (POST /api/v1/fee-types)
+	CreateFeeType(ctx context.Context, request CreateFeeTypeRequestObject) (CreateFeeTypeResponseObject, error)
+	// ArchiveFeeType Archive a fee type
+	// (POST /api/v1/fee-types/{feeTypeId}/archive)
+	ArchiveFeeType(ctx context.Context, request ArchiveFeeTypeRequestObject) (ArchiveFeeTypeResponseObject, error)
 	// ListJournalEntries List journal entries, newest first
 	// (GET /api/v1/journal-entries)
 	ListJournalEntries(ctx context.Context, request ListJournalEntriesRequestObject) (ListJournalEntriesResponseObject, error)
@@ -3138,6 +4499,15 @@ type StrictServerInterface interface {
 	// ListStudentEnrolments The enrolment history of one student, newest first
 	// (GET /api/v1/students/{studentId}/enrolments)
 	ListStudentEnrolments(ctx context.Context, request ListStudentEnrolmentsRequestObject) (ListStudentEnrolmentsResponseObject, error)
+	// ListFeeOverrides Every override version set for a student, newest first
+	// (GET /api/v1/students/{studentId}/fee-overrides)
+	ListFeeOverrides(ctx context.Context, request ListFeeOverridesRequestObject) (ListFeeOverridesResponseObject, error)
+	// SetFeeOverride Set (or clear) one student's amount for a fee type, from a month
+	// (POST /api/v1/students/{studentId}/fee-overrides)
+	SetFeeOverride(ctx context.Context, request SetFeeOverrideRequestObject) (SetFeeOverrideResponseObject, error)
+	// GetFeeStructure What this student is charged for a month
+	// (GET /api/v1/students/{studentId}/fee-structure)
+	GetFeeStructure(ctx context.Context, request GetFeeStructureRequestObject) (GetFeeStructureResponseObject, error)
 	// CreateToken Create a personal access token for scripts and terminal use
 	// (POST /api/v1/tokens)
 	CreateToken(ctx context.Context, request CreateTokenRequestObject) (CreateTokenResponseObject, error)
@@ -3345,6 +4715,173 @@ func (sh *strictHandler) ArchiveClass(w http.ResponseWriter, r *http.Request, cl
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ArchiveClassResponseObject); ok {
 		if err := validResponse.VisitArchiveClassResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetFeePlan operation middleware
+func (sh *strictHandler) GetFeePlan(w http.ResponseWriter, r *http.Request, classId openapi_types.UUID, params GetFeePlanParams) {
+	var request GetFeePlanRequestObject
+
+	request.ClassId = classId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetFeePlan(ctx, request.(GetFeePlanRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetFeePlan")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetFeePlanResponseObject); ok {
+		if err := validResponse.VisitGetFeePlanResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetFeePlanHistory operation middleware
+func (sh *strictHandler) GetFeePlanHistory(w http.ResponseWriter, r *http.Request, classId openapi_types.UUID) {
+	var request GetFeePlanHistoryRequestObject
+
+	request.ClassId = classId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetFeePlanHistory(ctx, request.(GetFeePlanHistoryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetFeePlanHistory")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetFeePlanHistoryResponseObject); ok {
+		if err := validResponse.VisitGetFeePlanHistoryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SetFeePlanLine operation middleware
+func (sh *strictHandler) SetFeePlanLine(w http.ResponseWriter, r *http.Request, classId openapi_types.UUID) {
+	var request SetFeePlanLineRequestObject
+
+	request.ClassId = classId
+
+	var body SetFeePlanLineJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetFeePlanLine(ctx, request.(SetFeePlanLineRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetFeePlanLine")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetFeePlanLineResponseObject); ok {
+		if err := validResponse.VisitSetFeePlanLineResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListFeeTypes operation middleware
+func (sh *strictHandler) ListFeeTypes(w http.ResponseWriter, r *http.Request) {
+	var request ListFeeTypesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListFeeTypes(ctx, request.(ListFeeTypesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListFeeTypes")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListFeeTypesResponseObject); ok {
+		if err := validResponse.VisitListFeeTypesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateFeeType operation middleware
+func (sh *strictHandler) CreateFeeType(w http.ResponseWriter, r *http.Request) {
+	var request CreateFeeTypeRequestObject
+
+	var body CreateFeeTypeJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateFeeType(ctx, request.(CreateFeeTypeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateFeeType")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateFeeTypeResponseObject); ok {
+		if err := validResponse.VisitCreateFeeTypeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ArchiveFeeType operation middleware
+func (sh *strictHandler) ArchiveFeeType(w http.ResponseWriter, r *http.Request, feeTypeId openapi_types.UUID) {
+	var request ArchiveFeeTypeRequestObject
+
+	request.FeeTypeId = feeTypeId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ArchiveFeeType(ctx, request.(ArchiveFeeTypeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ArchiveFeeType")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ArchiveFeeTypeResponseObject); ok {
+		if err := validResponse.VisitArchiveFeeTypeResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -3729,6 +5266,92 @@ func (sh *strictHandler) ListStudentEnrolments(w http.ResponseWriter, r *http.Re
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListStudentEnrolmentsResponseObject); ok {
 		if err := validResponse.VisitListStudentEnrolmentsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListFeeOverrides operation middleware
+func (sh *strictHandler) ListFeeOverrides(w http.ResponseWriter, r *http.Request, studentId openapi_types.UUID) {
+	var request ListFeeOverridesRequestObject
+
+	request.StudentId = studentId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListFeeOverrides(ctx, request.(ListFeeOverridesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListFeeOverrides")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListFeeOverridesResponseObject); ok {
+		if err := validResponse.VisitListFeeOverridesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SetFeeOverride operation middleware
+func (sh *strictHandler) SetFeeOverride(w http.ResponseWriter, r *http.Request, studentId openapi_types.UUID) {
+	var request SetFeeOverrideRequestObject
+
+	request.StudentId = studentId
+
+	var body SetFeeOverrideJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetFeeOverride(ctx, request.(SetFeeOverrideRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetFeeOverride")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetFeeOverrideResponseObject); ok {
+		if err := validResponse.VisitSetFeeOverrideResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetFeeStructure operation middleware
+func (sh *strictHandler) GetFeeStructure(w http.ResponseWriter, r *http.Request, studentId openapi_types.UUID, params GetFeeStructureParams) {
+	var request GetFeeStructureRequestObject
+
+	request.StudentId = studentId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetFeeStructure(ctx, request.(GetFeeStructureRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetFeeStructure")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetFeeStructureResponseObject); ok {
+		if err := validResponse.VisitGetFeeStructureResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Education Platform API
-  version: 0.4.0
+  version: 0.5.0
   description: Source of truth for every capability (DEC-004). Edit this first, then the code.
 # Infrastructure endpoints (health) sit at the root for the load balancer.
 # Product endpoints carry their version in the path, for example /api/v1/students.
@@ -15,6 +15,7 @@ tags:
   - name: students
   - name: structure
   - name: ledger
+  - name: fees
 
 security:
   - bearerAuth: []
@@ -510,6 +511,235 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "500": { $ref: "#/components/responses/InternalError" }
 
+  /api/v1/fee-types:
+    post:
+      operationId: createFeeType
+      tags: [fees]
+      summary: Add a fee type (a head such as Tuition or Transport)
+      description: Requires `fee.settings`. Fee types are archived, never deleted (DEC-011).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FeeTypeCreate" }
+      responses:
+        "201":
+          description: Fee type created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FeeType" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    get:
+      operationId: listFeeTypes
+      tags: [fees]
+      summary: List fee types, creating the suggested set the first time
+      description: |
+        Requires `fee.view`. A school starts with suggested types (Tuition, Admission, Registration,
+        Annual, Transport, Security Deposit). They are suggestions, never locks: archive what you do
+        not use. An archived suggestion is not recreated.
+      responses:
+        "200":
+          description: The fee types, ordered by name
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FeeTypeList" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/fee-types/{feeTypeId}/archive:
+    post:
+      operationId: archiveFeeType
+      tags: [fees]
+      summary: Archive a fee type
+      description: |
+        Requires `fee.settings`. An archived type cannot be added to a plan and drops out of the
+        fee structure from now on; past plan versions and released challans keep it.
+      parameters:
+        - name: feeTypeId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: The archived fee type
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FeeType" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/fee-plans/{classId}/lines:
+    post:
+      operationId: setFeePlanLine
+      tags: [fees]
+      summary: Set (or remove) one fee type on a class plan, from a month
+      description: |
+        Requires `fee.plan.manage`. This adds a new effective-dated version; the previous version
+        stays, so history is exact and a released challan is never altered (BR-FEE-001).
+        Setting the same fee type for the same month twice is a 409: choose a later month.
+      parameters:
+        - name: classId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PlanLineSet" }
+      responses:
+        "201":
+          description: The version that was added
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlanLine" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/fee-plans/{classId}:
+    get:
+      operationId: getFeePlan
+      tags: [fees]
+      summary: The class plan as it stands in a month
+      description: |
+        Requires `fee.view`. For each fee type, the latest version on or before the month, leaving
+        out types that were removed or archived.
+      parameters:
+        - name: classId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: month
+          in: query
+          required: false
+          description: Any date in the month. Defaults to the current month (Asia/Karachi).
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: The plan for that month
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FeePlan" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/fee-plans/{classId}/history:
+    get:
+      operationId: getFeePlanHistory
+      tags: [fees]
+      summary: Every version ever set on a class plan, newest first
+      description: Requires `fee.view`. Plan changes are audited and never overwrite earlier versions (REQ-FEE-001).
+      parameters:
+        - name: classId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: All versions
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlanLineList" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/students/{studentId}/fee-overrides:
+    post:
+      operationId: setFeeOverride
+      tags: [fees]
+      summary: Set (or clear) one student's amount for a fee type, from a month
+      description: |
+        Requires `fee.plan.manage`. The fee type must be on the student's class plan in that month.
+        A zero amount is allowed (a full concession). Like plan lines, this adds a version.
+      parameters:
+        - name: studentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OverrideSet" }
+      responses:
+        "201":
+          description: The version that was added
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FeeOverride" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    get:
+      operationId: listFeeOverrides
+      tags: [fees]
+      summary: Every override version set for a student, newest first
+      description: Requires `fee.view`.
+      parameters:
+        - name: studentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: The overrides
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FeeOverrideList" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/students/{studentId}/fee-structure:
+    get:
+      operationId: getFeeStructure
+      tags: [fees]
+      summary: What this student is charged for a month
+      description: |
+        Requires `fee.view`. The student's class plan for the month, with the student's overrides on
+        top. Each line carries its frequency; challan generation decides which lines fall due.
+      parameters:
+        - name: studentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: month
+          in: query
+          required: false
+          description: Any date in the month. Defaults to the current month (Asia/Karachi).
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: The fee structure
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FeeStructure" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -981,3 +1211,155 @@ components:
         total_debit: { $ref: "#/components/schemas/Money" }
         total_credit: { $ref: "#/components/schemas/Money" }
         balanced: { type: boolean }
+
+    FeeKind:
+      type: string
+      description: What a fee type is for. `security_deposit` is held for the family and is never income (BR-FEE-004).
+      enum: [tuition, admission, registration, annual, transport, lab, library, sports, fine, security_deposit, custom]
+
+    FeeFrequency:
+      type: string
+      description: How often a plan line is charged. Quarterly and term are 1.1 (REQ-FEE-002).
+      enum: [monthly, one_time, annual, ad_hoc]
+
+    FeeTypeCreate:
+      type: object
+      required: [code, name, kind]
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+          pattern: "^[a-z][a-z0-9_]{1,29}$"
+          description: A short stable key, unique in the school.
+          example: lab_fee
+        name: { type: string, minLength: 1, maxLength: 60, example: Lab Fee }
+        kind: { $ref: "#/components/schemas/FeeKind" }
+
+    FeeType:
+      type: object
+      required: [id, code, name, kind, is_deposit, status]
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string }
+        name: { type: string }
+        kind: { $ref: "#/components/schemas/FeeKind" }
+        is_deposit: { type: boolean, description: True only for security deposits. }
+        status: { type: string, enum: [active, archived] }
+
+    FeeTypeList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/FeeType" }
+
+    PlanLineSet:
+      type: object
+      required: [fee_type_id, effective_from]
+      additionalProperties: false
+      properties:
+        fee_type_id: { type: string, format: uuid }
+        effective_from:
+          type: string
+          format: date
+          description: Any date in the month the change starts. It is stored as the first of that month.
+        remove:
+          type: boolean
+          default: false
+          description: Take this fee type off the plan from that month. No amount or frequency is sent.
+        amount:
+          $ref: "#/components/schemas/Money"
+        frequency:
+          $ref: "#/components/schemas/FeeFrequency"
+
+    PlanLine:
+      type: object
+      required: [fee_type_id, fee_type_name, effective_from, removed]
+      properties:
+        fee_type_id: { type: string, format: uuid }
+        fee_type_name: { type: string }
+        kind: { $ref: "#/components/schemas/FeeKind" }
+        amount: { $ref: "#/components/schemas/Money" }
+        frequency: { $ref: "#/components/schemas/FeeFrequency" }
+        effective_from: { type: string, format: date }
+        removed: { type: boolean }
+
+    PlanLineList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PlanLine" }
+
+    FeePlan:
+      type: object
+      required: [class_id, month, lines]
+      properties:
+        class_id: { type: string, format: uuid }
+        month: { type: string, format: date, description: The first day of the month asked for. }
+        lines:
+          type: array
+          items: { $ref: "#/components/schemas/PlanLine" }
+
+    OverrideSet:
+      type: object
+      required: [fee_type_id, effective_from, reason]
+      additionalProperties: false
+      properties:
+        fee_type_id: { type: string, format: uuid }
+        effective_from: { type: string, format: date }
+        reason: { type: string, minLength: 3, maxLength: 200, example: sibling concession }
+        clear:
+          type: boolean
+          default: false
+          description: Go back to the class plan amount from that month. No amount is sent.
+        amount:
+          $ref: "#/components/schemas/Money"
+
+    FeeOverride:
+      type: object
+      required: [fee_type_id, fee_type_name, effective_from, cleared, reason, created_at]
+      properties:
+        fee_type_id: { type: string, format: uuid }
+        fee_type_name: { type: string }
+        amount: { $ref: "#/components/schemas/Money" }
+        effective_from: { type: string, format: date }
+        cleared: { type: boolean }
+        reason: { type: string }
+        created_at: { type: string, format: date-time }
+
+    FeeOverrideList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/FeeOverride" }
+
+    FeeLine:
+      type: object
+      required: [fee_type_id, fee_type_name, kind, amount, plan_amount, frequency, source]
+      properties:
+        fee_type_id: { type: string, format: uuid }
+        fee_type_name: { type: string }
+        kind: { $ref: "#/components/schemas/FeeKind" }
+        amount: { $ref: "#/components/schemas/Money" }
+        plan_amount: { $ref: "#/components/schemas/Money" }
+        frequency: { $ref: "#/components/schemas/FeeFrequency" }
+        source:
+          type: string
+          enum: [plan, override]
+          description: Where `amount` came from.
+
+    FeeStructure:
+      type: object
+      required: [student_id, class_id, month, lines]
+      properties:
+        student_id: { type: string, format: uuid }
+        class_id: { type: string, format: uuid }
+        month: { type: string, format: date }
+        lines:
+          type: array
+          items: { $ref: "#/components/schemas/FeeLine" }
