@@ -179,7 +179,7 @@ func TestREQ_IAM_002_CallerWithoutThePermissionGets403(t *testing.T) {
 	ctx := context.Background()
 	slug, mobile, tenantID := newTenant(t, f, "noperm")
 	session := signIn(t, f, mobile, slug)
-	h := api.Handler(api.NewServer(f.iam, f.org, f.students), f.iam)
+	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger), f.iam)
 
 	// Remove every role: the membership stays active but holds no permission.
 	if _, err := f.admin.Exec(ctx, `DELETE FROM role_assignments WHERE tenant_id = $1`, tenantID); err != nil {

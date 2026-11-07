@@ -12,6 +12,7 @@ import (
 
 	"github.com/zainasr/edu-plat/services/api/internal/api/gen"
 	"github.com/zainasr/edu-plat/services/api/internal/iam"
+	"github.com/zainasr/edu-plat/services/api/internal/ledger"
 	"github.com/zainasr/edu-plat/services/api/internal/org"
 	"github.com/zainasr/edu-plat/services/api/internal/platform/apperr"
 	"github.com/zainasr/edu-plat/services/api/internal/students"
@@ -22,11 +23,12 @@ type Server struct {
 	iam      *iam.Service
 	org      *org.Service
 	students *students.Service
+	ledger   *ledger.Service
 }
 
 // NewServer wires the services into the HTTP handlers.
-func NewServer(identity *iam.Service, structure *org.Service, enrolment *students.Service) *Server {
-	return &Server{iam: identity, org: structure, students: enrolment}
+func NewServer(identity *iam.Service, structure *org.Service, enrolment *students.Service, books *ledger.Service) *Server {
+	return &Server{iam: identity, org: structure, students: enrolment, ledger: books}
 }
 
 // GetHealth reports that the process is up. Readiness checks (database, queue)

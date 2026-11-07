@@ -32,7 +32,7 @@ func TestUS_IAM_004_TokenCreatesAndReadsStudentOverHTTP(t *testing.T) {
 	slug, mobile, tenantID := newTenant(t, f, "http")
 	otherSlug, otherMobile, _ := newTenant(t, f, "other")
 
-	h := api.Handler(api.NewServer(f.iam, f.org, f.students), f.iam)
+	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger), f.iam)
 
 	// 1. Request and verify an OTP over HTTP.
 	if rec := do(t, h, http.MethodPost, "/api/v1/auth/otp/request", "", `{"mobile":"`+mobile+`"}`); rec.Code != http.StatusAccepted {

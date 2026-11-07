@@ -96,6 +96,48 @@ func (e GuardianAccess) Valid() bool {
 	}
 }
 
+// Defines values for LedgerAccountType.
+const (
+	Asset     LedgerAccountType = "asset"
+	Equity    LedgerAccountType = "equity"
+	Expense   LedgerAccountType = "expense"
+	Income    LedgerAccountType = "income"
+	Liability LedgerAccountType = "liability"
+)
+
+// Valid indicates whether the value is a known member of the LedgerAccountType enum.
+func (e LedgerAccountType) Valid() bool {
+	switch e {
+	case Asset:
+		return true
+	case Equity:
+		return true
+	case Expense:
+		return true
+	case Income:
+		return true
+	case Liability:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MoneyCurrency.
+const (
+	PKR MoneyCurrency = "PKR"
+)
+
+// Valid indicates whether the value is a known member of the MoneyCurrency enum.
+func (e MoneyCurrency) Valid() bool {
+	switch e {
+	case PKR:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for Relationship.
 const (
 	RelationshipAunt        Relationship = "aunt"
@@ -335,10 +377,84 @@ type GuardianView struct {
 	Relationship Relationship `json:"relationship"`
 }
 
+// JournalEntry defines model for JournalEntry.
+type JournalEntry struct {
+	CreatedAt time.Time `json:"created_at"`
+
+	// EntryNo Consecutive per school
+	EntryNo    int64              `json:"entry_no"`
+	Id         openapi_types.UUID `json:"id"`
+	Lines      []JournalLine      `json:"lines"`
+	Memo       string             `json:"memo"`
+	OccurredOn openapi_types.Date `json:"occurred_on"`
+
+	// ReversesEntryId Set when this entry reverses another.
+	ReversesEntryId *openapi_types.UUID `json:"reverses_entry_id,omitempty"`
+	SourceId        *openapi_types.UUID `json:"source_id,omitempty"`
+
+	// SourceType Example: challan.released
+	SourceType string `json:"source_type"`
+}
+
+// JournalEntryPage defines model for JournalEntryPage.
+type JournalEntryPage struct {
+	Items      []JournalEntry `json:"items"`
+	NextCursor *string        `json:"next_cursor,omitempty"`
+}
+
+// JournalLine defines model for JournalLine.
+type JournalLine struct {
+	AccountCode string `json:"account_code"`
+	AccountName string `json:"account_name"`
+
+	// Credit An amount in minor units (paisa). Never a decimal or a float (API conventions §2).
+	Credit Money `json:"credit"`
+
+	// Debit An amount in minor units (paisa). Never a decimal or a float (API conventions §2).
+	Debit  Money `json:"debit"`
+	LineNo int   `json:"line_no"`
+}
+
+// LedgerAccount defines model for LedgerAccount.
+type LedgerAccount struct {
+	// Code Example: 1200
+	Code string             `json:"code"`
+	Id   openapi_types.UUID `json:"id"`
+
+	// Name Example: Fee Receivable
+	Name string `json:"name"`
+
+	// System Built-in accounts cannot be removed.
+	System bool              `json:"system"`
+	Type   LedgerAccountType `json:"type"`
+}
+
+// LedgerAccountType defines model for LedgerAccount.Type.
+type LedgerAccountType string
+
+// LedgerAccountList defines model for LedgerAccountList.
+type LedgerAccountList struct {
+	Items []LedgerAccount `json:"items"`
+}
+
 // Mobile Pakistani mobile, as 03XXXXXXXXX or +923XXXXXXXXX. Stored as E.164.
 //
 // Example: 03001234567
 type Mobile = string
+
+// Money An amount in minor units (paisa). Never a decimal or a float (API conventions §2).
+type Money struct {
+	// Amount Whole paisa. 150000 is PKR 1,500.00.
+	//
+	// Example: 150000
+	Amount int64 `json:"amount"`
+
+	// Currency Example: PKR
+	Currency MoneyCurrency `json:"currency"`
+}
+
+// MoneyCurrency Example: PKR
+type MoneyCurrency string
 
 // OtpRequest defines model for OtpRequest.
 type OtpRequest struct {
@@ -496,6 +612,32 @@ type TokenCreated struct {
 	Token string `json:"token"`
 }
 
+// TrialBalance defines model for TrialBalance.
+type TrialBalance struct {
+	AsOf     openapi_types.Date `json:"as_of"`
+	Balanced bool               `json:"balanced"`
+	Lines    []TrialBalanceLine `json:"lines"`
+
+	// TotalCredit An amount in minor units (paisa). Never a decimal or a float (API conventions §2).
+	TotalCredit Money `json:"total_credit"`
+
+	// TotalDebit An amount in minor units (paisa). Never a decimal or a float (API conventions §2).
+	TotalDebit Money `json:"total_debit"`
+}
+
+// TrialBalanceLine defines model for TrialBalanceLine.
+type TrialBalanceLine struct {
+	AccountCode string `json:"account_code"`
+	AccountName string `json:"account_name"`
+	AccountType string `json:"account_type"`
+
+	// Credit An amount in minor units (paisa). Never a decimal or a float (API conventions §2).
+	Credit Money `json:"credit"`
+
+	// Debit An amount in minor units (paisa). Never a decimal or a float (API conventions §2).
+	Debit Money `json:"debit"`
+}
+
 // Conflict defines model for Conflict.
 type Conflict = ErrorEnvelope
 
@@ -519,6 +661,18 @@ type Unauthenticated = ErrorEnvelope
 
 // ValidationError defines model for ValidationError.
 type ValidationError = ErrorEnvelope
+
+// ListJournalEntriesParams defines parameters for ListJournalEntries.
+type ListJournalEntriesParams struct {
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// GetTrialBalanceParams defines parameters for GetTrialBalance.
+type GetTrialBalanceParams struct {
+	// AsOf Include entries dated on or before this day. Defaults to today (Asia/Karachi).
+	AsOf *openapi_types.Date `form:"as_of,omitempty" json:"as_of,omitempty"`
+}
 
 // ListSectionsParams defines parameters for ListSections.
 type ListSectionsParams struct {
@@ -557,6 +711,9 @@ type CreateTokenJSONRequestBody = TokenCreate
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// ListLedgerAccounts List the school's ledger accounts
+	// (GET /api/v1/accounts)
+	ListLedgerAccounts(w http.ResponseWriter, r *http.Request)
 	// RequestOtp Send a one-time code to a mobile number
 	// (POST /api/v1/auth/otp/request)
 	RequestOtp(w http.ResponseWriter, r *http.Request)
@@ -572,6 +729,15 @@ type ServerInterface interface {
 	// ArchiveClass Archive a class; it is never deleted
 	// (POST /api/v1/classes/{classId}/archive)
 	ArchiveClass(w http.ResponseWriter, r *http.Request, classId openapi_types.UUID)
+	// ListJournalEntries List journal entries, newest first
+	// (GET /api/v1/journal-entries)
+	ListJournalEntries(w http.ResponseWriter, r *http.Request, params ListJournalEntriesParams)
+	// GetJournalEntry Read one journal entry with its lines
+	// (GET /api/v1/journal-entries/{entryId})
+	GetJournalEntry(w http.ResponseWriter, r *http.Request, entryId openapi_types.UUID)
+	// GetTrialBalance Debit and credit totals per account up to a date
+	// (GET /api/v1/reports/trial-balance)
+	GetTrialBalance(w http.ResponseWriter, r *http.Request, params GetTrialBalanceParams)
 	// ListSections List sections, optionally of one class
 	// (GET /api/v1/sections)
 	ListSections(w http.ResponseWriter, r *http.Request, params ListSectionsParams)
@@ -621,6 +787,20 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// ListLedgerAccounts operation middleware
+func (siw *ServerInterfaceWrapper) ListLedgerAccounts(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListLedgerAccounts(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // RequestOtp operation middleware
 func (siw *ServerInterfaceWrapper) RequestOtp(w http.ResponseWriter, r *http.Request) {
@@ -695,6 +875,111 @@ func (siw *ServerInterfaceWrapper) ArchiveClass(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ArchiveClass(w, r, classId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListJournalEntries operation middleware
+func (siw *ServerInterfaceWrapper) ListJournalEntries(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListJournalEntriesParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListJournalEntries(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetJournalEntry operation middleware
+func (siw *ServerInterfaceWrapper) GetJournalEntry(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "entryId" -------------
+	var entryId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "entryId", r.PathValue("entryId"), &entryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "entryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetJournalEntry(w, r, entryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetTrialBalance operation middleware
+func (siw *ServerInterfaceWrapper) GetTrialBalance(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetTrialBalanceParams
+
+	// ------------- Optional query parameter "as_of" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "as_of", r.URL.Query(), &params.AsOf, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "as_of"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "as_of", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetTrialBalance(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1135,6 +1420,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/sections", wrapper.ListSections)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/sections", wrapper.CreateSection)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/sections/{sectionId}/archive", wrapper.ArchiveSection)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/accounts", wrapper.ListLedgerAccounts)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/journal-entries", wrapper.ListJournalEntries)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/journal-entries/{entryId}", wrapper.GetJournalEntry)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/reports/trial-balance", wrapper.GetTrialBalance)
 
 	return m
 }
@@ -1154,6 +1443,69 @@ type OtpLockedJSONResponse ErrorEnvelope
 type UnauthenticatedJSONResponse ErrorEnvelope
 
 type ValidationErrorJSONResponse ErrorEnvelope
+
+type ListLedgerAccountsRequestObject struct {
+}
+
+type ListLedgerAccountsResponseObject interface {
+	VisitListLedgerAccountsResponse(w http.ResponseWriter) error
+}
+
+type ListLedgerAccounts200JSONResponse LedgerAccountList
+
+func (response ListLedgerAccounts200JSONResponse) VisitListLedgerAccountsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListLedgerAccounts401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ListLedgerAccounts401JSONResponse) VisitListLedgerAccountsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListLedgerAccounts403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListLedgerAccounts403JSONResponse) VisitListLedgerAccountsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListLedgerAccounts500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListLedgerAccounts500JSONResponse) VisitListLedgerAccountsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
 
 type RequestOtpRequestObject struct {
 	Body *RequestOtpJSONRequestBody
@@ -1505,6 +1857,226 @@ func (response ArchiveClass404JSONResponse) VisitArchiveClassResponse(w http.Res
 type ArchiveClass500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response ArchiveClass500JSONResponse) VisitArchiveClassResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListJournalEntriesRequestObject struct {
+	Params ListJournalEntriesParams
+}
+
+type ListJournalEntriesResponseObject interface {
+	VisitListJournalEntriesResponse(w http.ResponseWriter) error
+}
+
+type ListJournalEntries200JSONResponse JournalEntryPage
+
+func (response ListJournalEntries200JSONResponse) VisitListJournalEntriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListJournalEntries400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response ListJournalEntries400JSONResponse) VisitListJournalEntriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListJournalEntries401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ListJournalEntries401JSONResponse) VisitListJournalEntriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListJournalEntries403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListJournalEntries403JSONResponse) VisitListJournalEntriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListJournalEntries500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListJournalEntries500JSONResponse) VisitListJournalEntriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetJournalEntryRequestObject struct {
+	EntryId openapi_types.UUID `json:"entryId"`
+}
+
+type GetJournalEntryResponseObject interface {
+	VisitGetJournalEntryResponse(w http.ResponseWriter) error
+}
+
+type GetJournalEntry200JSONResponse JournalEntry
+
+func (response GetJournalEntry200JSONResponse) VisitGetJournalEntryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetJournalEntry401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response GetJournalEntry401JSONResponse) VisitGetJournalEntryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetJournalEntry403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetJournalEntry403JSONResponse) VisitGetJournalEntryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetJournalEntry404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetJournalEntry404JSONResponse) VisitGetJournalEntryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetJournalEntry500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GetJournalEntry500JSONResponse) VisitGetJournalEntryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTrialBalanceRequestObject struct {
+	Params GetTrialBalanceParams
+}
+
+type GetTrialBalanceResponseObject interface {
+	VisitGetTrialBalanceResponse(w http.ResponseWriter) error
+}
+
+type GetTrialBalance200JSONResponse TrialBalance
+
+func (response GetTrialBalance200JSONResponse) VisitGetTrialBalanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTrialBalance401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response GetTrialBalance401JSONResponse) VisitGetTrialBalanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTrialBalance403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetTrialBalance403JSONResponse) VisitGetTrialBalanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTrialBalance500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GetTrialBalance500JSONResponse) VisitGetTrialBalanceResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -2506,6 +3078,9 @@ func (response GetHealth200JSONResponse) VisitGetHealthResponse(w http.ResponseW
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// ListLedgerAccounts List the school's ledger accounts
+	// (GET /api/v1/accounts)
+	ListLedgerAccounts(ctx context.Context, request ListLedgerAccountsRequestObject) (ListLedgerAccountsResponseObject, error)
 	// RequestOtp Send a one-time code to a mobile number
 	// (POST /api/v1/auth/otp/request)
 	RequestOtp(ctx context.Context, request RequestOtpRequestObject) (RequestOtpResponseObject, error)
@@ -2521,6 +3096,15 @@ type StrictServerInterface interface {
 	// ArchiveClass Archive a class; it is never deleted
 	// (POST /api/v1/classes/{classId}/archive)
 	ArchiveClass(ctx context.Context, request ArchiveClassRequestObject) (ArchiveClassResponseObject, error)
+	// ListJournalEntries List journal entries, newest first
+	// (GET /api/v1/journal-entries)
+	ListJournalEntries(ctx context.Context, request ListJournalEntriesRequestObject) (ListJournalEntriesResponseObject, error)
+	// GetJournalEntry Read one journal entry with its lines
+	// (GET /api/v1/journal-entries/{entryId})
+	GetJournalEntry(ctx context.Context, request GetJournalEntryRequestObject) (GetJournalEntryResponseObject, error)
+	// GetTrialBalance Debit and credit totals per account up to a date
+	// (GET /api/v1/reports/trial-balance)
+	GetTrialBalance(ctx context.Context, request GetTrialBalanceRequestObject) (GetTrialBalanceResponseObject, error)
 	// ListSections List sections, optionally of one class
 	// (GET /api/v1/sections)
 	ListSections(ctx context.Context, request ListSectionsRequestObject) (ListSectionsResponseObject, error)
@@ -2599,6 +3183,30 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// ListLedgerAccounts operation middleware
+func (sh *strictHandler) ListLedgerAccounts(w http.ResponseWriter, r *http.Request) {
+	var request ListLedgerAccountsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListLedgerAccounts(ctx, request.(ListLedgerAccountsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListLedgerAccounts")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListLedgerAccountsResponseObject); ok {
+		if err := validResponse.VisitListLedgerAccountsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // RequestOtp operation middleware
@@ -2737,6 +3345,84 @@ func (sh *strictHandler) ArchiveClass(w http.ResponseWriter, r *http.Request, cl
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ArchiveClassResponseObject); ok {
 		if err := validResponse.VisitArchiveClassResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListJournalEntries operation middleware
+func (sh *strictHandler) ListJournalEntries(w http.ResponseWriter, r *http.Request, params ListJournalEntriesParams) {
+	var request ListJournalEntriesRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListJournalEntries(ctx, request.(ListJournalEntriesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListJournalEntries")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListJournalEntriesResponseObject); ok {
+		if err := validResponse.VisitListJournalEntriesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetJournalEntry operation middleware
+func (sh *strictHandler) GetJournalEntry(w http.ResponseWriter, r *http.Request, entryId openapi_types.UUID) {
+	var request GetJournalEntryRequestObject
+
+	request.EntryId = entryId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetJournalEntry(ctx, request.(GetJournalEntryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetJournalEntry")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetJournalEntryResponseObject); ok {
+		if err := validResponse.VisitGetJournalEntryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetTrialBalance operation middleware
+func (sh *strictHandler) GetTrialBalance(w http.ResponseWriter, r *http.Request, params GetTrialBalanceParams) {
+	var request GetTrialBalanceRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetTrialBalance(ctx, request.(GetTrialBalanceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetTrialBalance")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetTrialBalanceResponseObject); ok {
+		if err := validResponse.VisitGetTrialBalanceResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -14,6 +14,7 @@ import (
 
 	"github.com/zainasr/edu-plat/services/api/internal/api"
 	"github.com/zainasr/edu-plat/services/api/internal/iam"
+	"github.com/zainasr/edu-plat/services/api/internal/ledger"
 	"github.com/zainasr/edu-plat/services/api/internal/org"
 	"github.com/zainasr/edu-plat/services/api/internal/platform/config"
 	"github.com/zainasr/edu-plat/services/api/internal/platform/db"
@@ -56,9 +57,10 @@ func run() error {
 	identity := iam.NewService(pool, sender, cfg.AuthSecret)
 	structure := org.NewService(pool)
 	enrolment := students.NewService(pool, structure) // students asks org to describe sections
+	books := ledger.NewService(pool)                  // the double-entry core; fee code posts to it
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           api.Handler(api.NewServer(identity, structure, enrolment), identity),
+		Handler:           api.Handler(api.NewServer(identity, structure, enrolment, books), identity),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

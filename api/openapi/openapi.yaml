@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Education Platform API
-  version: 0.3.0
+  version: 0.4.0
   description: Source of truth for every capability (DEC-004). Edit this first, then the code.
 # Infrastructure endpoints (health) sit at the root for the load balancer.
 # Product endpoints carry their version in the path, for example /api/v1/students.
@@ -14,6 +14,7 @@ tags:
   - name: tokens
   - name: students
   - name: structure
+  - name: ledger
 
 security:
   - bearerAuth: []
@@ -416,6 +417,99 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
 
+  /api/v1/accounts:
+    get:
+      operationId: listLedgerAccounts
+      tags: [ledger]
+      summary: List the school's ledger accounts
+      description: |
+        Requires `ledger.view`. The built-in chart is created the first time money is posted, so a
+        school that has never posted money lists none.
+      responses:
+        "200":
+          description: The accounts, ordered by code
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LedgerAccountList" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/journal-entries:
+    get:
+      operationId: listJournalEntries
+      tags: [ledger]
+      summary: List journal entries, newest first
+      description: |
+        Requires `ledger.view`. There is no endpoint that creates or changes an entry: money is
+        posted only by fee and accounting actions, and a correction is a reversing entry
+        (DEC-011, DEC-016).
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: cursor
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: A page of entries with their lines
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JournalEntryPage" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/journal-entries/{entryId}:
+    get:
+      operationId: getJournalEntry
+      tags: [ledger]
+      summary: Read one journal entry with its lines
+      description: Requires `ledger.view`. An entry outside the caller's tenant is a 404.
+      parameters:
+        - name: entryId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: The entry
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JournalEntry" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/reports/trial-balance:
+    get:
+      operationId: getTrialBalance
+      tags: [ledger]
+      summary: Debit and credit totals per account up to a date
+      description: |
+        Requires `report.finance.view`. Total debits always equal total credits when the ledger is
+        sound; `balanced` shows it so a person can see it.
+      parameters:
+        - name: as_of
+          in: query
+          required: false
+          description: Include entries dated on or before this day. Defaults to today (Asia/Karachi).
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: The trial balance
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TrialBalance" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -796,3 +890,94 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/Enrolment" }
+
+    Money:
+      type: object
+      description: An amount in minor units (paisa). Never a decimal or a float (API conventions §2).
+      required: [amount, currency]
+      properties:
+        amount:
+          type: integer
+          format: int64
+          description: Whole paisa. 150000 is PKR 1,500.00.
+          example: 150000
+        currency: { type: string, enum: [PKR], example: PKR }
+
+    LedgerAccount:
+      type: object
+      required: [id, code, name, type, system]
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string, example: "1200" }
+        name: { type: string, example: Fee Receivable }
+        type: { type: string, enum: [asset, liability, income, expense, equity] }
+        system: { type: boolean, description: Built-in accounts cannot be removed. }
+
+    LedgerAccountList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/LedgerAccount" }
+
+    JournalLine:
+      type: object
+      required: [line_no, account_code, account_name, debit, credit]
+      properties:
+        line_no: { type: integer }
+        account_code: { type: string }
+        account_name: { type: string }
+        debit: { $ref: "#/components/schemas/Money" }
+        credit: { $ref: "#/components/schemas/Money" }
+
+    JournalEntry:
+      type: object
+      required: [id, entry_no, occurred_on, memo, source_type, lines, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        entry_no: { type: integer, format: int64, description: Consecutive per school, no gaps. }
+        occurred_on: { type: string, format: date }
+        memo: { type: string }
+        source_type: { type: string, example: challan.released }
+        source_id: { type: string, format: uuid, nullable: true }
+        reverses_entry_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Set when this entry reverses another.
+        lines:
+          type: array
+          items: { $ref: "#/components/schemas/JournalLine" }
+        created_at: { type: string, format: date-time }
+
+    JournalEntryPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/JournalEntry" }
+        next_cursor: { type: string, nullable: true }
+
+    TrialBalanceLine:
+      type: object
+      required: [account_code, account_name, account_type, debit, credit]
+      properties:
+        account_code: { type: string }
+        account_name: { type: string }
+        account_type: { type: string }
+        debit: { $ref: "#/components/schemas/Money" }
+        credit: { $ref: "#/components/schemas/Money" }
+
+    TrialBalance:
+      type: object
+      required: [as_of, lines, total_debit, total_credit, balanced]
+      properties:
+        as_of: { type: string, format: date }
+        lines:
+          type: array
+          items: { $ref: "#/components/schemas/TrialBalanceLine" }
+        total_debit: { $ref: "#/components/schemas/Money" }
+        total_credit: { $ref: "#/components/schemas/Money" }
+        balanced: { type: boolean }

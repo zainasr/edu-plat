@@ -61,7 +61,7 @@ func TestREQ_API_NewEndpointsRequireAuthAndPermission(t *testing.T) {
 	ctx := context.Background()
 	slug, mobile, tenantID := newTenant(t, f, "authz")
 	session := signIn(t, f, mobile, slug)
-	h := api.Handler(api.NewServer(f.iam, f.org, f.students), f.iam)
+	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger), f.iam)
 
 	// Remove every role: the session stays valid but holds no permission.
 	if _, err := f.admin.Exec(ctx, `DELETE FROM role_assignments WHERE tenant_id = $1`, tenantID); err != nil {
@@ -104,7 +104,7 @@ func TestUS_IAM_005_DeactivatedMembershipGets401OverHTTP(t *testing.T) {
 	ctx := context.Background()
 	slug, mobile, tenantID := newTenant(t, f, "deact-http")
 	session := signIn(t, f, mobile, slug)
-	h := api.Handler(api.NewServer(f.iam, f.org, f.students), f.iam)
+	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger), f.iam)
 
 	if rec := do(t, h, http.MethodGet, "/api/v1/classes", session, ""); rec.Code != http.StatusOK {
 		t.Fatalf("before deactivation: %d %s", rec.Code, rec.Body)
@@ -123,7 +123,7 @@ func TestUS_STU_005_ChangeSectionOverHTTP(t *testing.T) {
 	slug, mobile, _ := newTenant(t, f, "move-http")
 	p := principalFor(t, f, slug, mobile)
 	st := newStructure(t, f, p)
-	h := api.Handler(api.NewServer(f.iam, f.org, f.students), f.iam)
+	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger), f.iam)
 	token := signIn(t, f, mobile, slug)
 
 	rec := do(t, h, http.MethodPost, "/api/v1/sections", token,
