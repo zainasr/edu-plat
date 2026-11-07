@@ -19,6 +19,14 @@ sql:
         sql_package: pgx/v5
   - engine: postgresql
     schema: migrations
+    queries: internal/ledger/store/queries
+    gen:
+      go:
+        package: gen
+        out: internal/ledger/store/gen
+        sql_package: pgx/v5
+  - engine: postgresql
+    schema: migrations
     queries: internal/students/store/queries
     gen:
       go:

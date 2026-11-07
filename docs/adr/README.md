@@ -17,5 +17,6 @@ An ADR records one significant technical choice: the context, the options, the d
 | 0011 | Walking-skeleton auth, tenancy and data access | Accepted |
 | 0012 | sqlc for module queries, hand-written pgx for the definer lookups | Accepted |
 | 0013 | Academic structure, the default branch, and cross-module calls inside one transaction | Accepted |
+| 0014 | Ledger core: balance enforced by the database, gapless numbers, internal-only posting | Accepted |
 
 Still to write when reached: token format and sessions, PDF renderer, observability stack, Terraform layout.

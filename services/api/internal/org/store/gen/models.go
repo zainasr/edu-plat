@@ -8,6 +8,17 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type Account struct {
+	ID        pgtype.UUID
+	TenantID  pgtype.UUID
+	Code      string
+	Name      string
+	Type      string
+	System    bool
+	CreatedAt pgtype.Timestamptz
+	CreatedBy pgtype.UUID
+}
+
 type ApiToken struct {
 	ID           pgtype.UUID
 	TenantID     pgtype.UUID
@@ -101,6 +112,29 @@ type GuardianLink struct {
 	Access                string
 	CreatedAt             pgtype.Timestamptz
 	CreatedBy             pgtype.UUID
+}
+
+type JournalEntry struct {
+	ID              pgtype.UUID
+	TenantID        pgtype.UUID
+	EntryNo         int64
+	OccurredOn      pgtype.Date
+	Memo            string
+	SourceType      string
+	SourceID        pgtype.UUID
+	ReversesEntryID pgtype.UUID
+	CreatedAt       pgtype.Timestamptz
+	CreatedBy       pgtype.UUID
+}
+
+type JournalLine struct {
+	ID        pgtype.UUID
+	TenantID  pgtype.UUID
+	EntryID   pgtype.UUID
+	LineNo    int32
+	AccountID pgtype.UUID
+	Debit     int64
+	Credit    int64
 }
 
 type Membership struct {

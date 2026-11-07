@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/zainasr/edu-plat/services/api/internal/iam"
+	"github.com/zainasr/edu-plat/services/api/internal/ledger"
 	"github.com/zainasr/edu-plat/services/api/internal/org"
 	"github.com/zainasr/edu-plat/services/api/internal/platform/db"
 	"github.com/zainasr/edu-plat/services/api/internal/students"
@@ -74,6 +75,7 @@ type fixture struct {
 	iam      *iam.Service
 	org      *org.Service
 	students *students.Service
+	ledger   *ledger.Service
 }
 
 // newTenant creates a tenant with one owner through the real bootstrap path.
@@ -133,6 +135,7 @@ func newFixture(t *testing.T) *fixture {
 		iam:      iam.NewService(app, sender, secret),
 		org:      structure,
 		students: students.NewService(app, structure),
+		ledger:   ledger.NewService(app),
 	}
 }
 
