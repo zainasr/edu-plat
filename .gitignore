@@ -4,6 +4,8 @@
 !.env.example
 CLAUDE.local.md
 .claude/settings.local.json
+# personal learning notes: kept on this machine, never pushed
+docs/learning/walkthrough/
 # build output
 bin/
 dist/
