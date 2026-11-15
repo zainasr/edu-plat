@@ -37,6 +37,16 @@ var rolePermissions = map[string][]string{
 		PermLedgerView, PermReportFinanceView,
 		PermFeeView, PermFeePlanManage, PermFeeSettings, PermFeeGenerate, PermFeeRelease,
 	},
+	// Accountant: fee.* except settings, and the accounting reads (spec 02-identity §3). Payments,
+	// payroll and the rest are added with the slices that build them.
+	"accountant": {
+		PermFeeView, PermFeePlanManage, PermFeeGenerate, PermFeeRelease,
+		PermLedgerView, PermReportFinanceView,
+	},
+	// Receptionist: sees students and fees; fee.collect and the cash session arrive with payments.
+	"receptionist": {
+		PermStudentView, PermFeeView,
+	},
 }
 
 // Principal is who is calling, in which tenant, with which token (REQ-IAM-002, REQ-API-017).
