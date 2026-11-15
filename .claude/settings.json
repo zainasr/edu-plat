@@ -9,8 +9,15 @@
       "Bash(go mod tidy)",
       "Bash(gofmt *)",
       "Bash(git status)",
+      "Bash(git status *)",
       "Bash(git diff *)",
       "Bash(git log *)",
+      "Bash(git fetch *)",
+      "Bash(git branch *)",
+      "Bash(scripts/*)",
+      "Bash(gh run list *)",
+      "Bash(gh run view *)",
+      "Bash(gh run watch *)",
       "Bash(docker compose *)",
       "WebFetch(domain:go.dev)",
       "WebFetch(domain:pkg.go.dev)",
@@ -32,11 +39,28 @@
     ]
   },
   "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear",
+        "hooks": [
+          { "type": "command", "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/session-start.sh", "timeout": 15 }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Edit|Write",
         "hooks": [
-          { "type": "command", "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-paths.sh", "timeout": 10 }
+          { "type": "command", "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-paths.sh", "timeout": 10 },
+          { "type": "command", "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-money.sh", "timeout": 10 },
+          { "type": "command", "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-migration.sh", "timeout": 10 },
+          { "type": "command", "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-secrets.sh", "timeout": 10 }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-git.sh", "timeout": 300 }
         ]
       }
     ],
@@ -45,6 +69,13 @@
         "matcher": "Edit|Write",
         "hooks": [
           { "type": "command", "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/format-go.sh", "timeout": 30 }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/stop-check.sh", "timeout": 20 }
         ]
       }
     ]

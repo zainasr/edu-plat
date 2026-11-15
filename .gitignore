@@ -18,3 +18,6 @@ coverage.out
 .idea/
 .vscode/
 .DS_Store
+
+# Claude Code session state (the last passing make check fingerprint)
+.claude/state/

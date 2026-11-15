@@ -1,4 +1,4 @@
-.PHONY: check test lint run db-up db-down db-roles migrate gen tools
+.PHONY: check test lint run db-up db-down db-roles migrate gen tools evaluate test-hooks spec-coverage
 API := services/api
 
 # Pinned developer tools. Bump a version here and in the same PR, then run `make tools`.
@@ -13,7 +13,23 @@ ADMIN_DATABASE_URL ?= postgresql://app:app@localhost:5432/app_dev
 DATABASE_URL       ?= postgresql://app_rt:app_rt@localhost:5432/app_dev
 export ADMIN_DATABASE_URL DATABASE_URL
 
+# The gate before any work is called done. The last line records that it passed for this exact
+# working tree, so the Stop hook can tell "checked" from "changed since".
 check: lint test
+	@scripts/stamp.sh
+
+# The independent evaluation: every gate in one table (see docs/engineering/agentic-sdlc.md).
+# Slower than `make check`: it forces uncached tests, regenerates code and builds a scratch database.
+evaluate:
+	@scripts/evaluate.sh
+
+# Tests the Claude hooks themselves. Run after any change to .claude/hooks or .claude/settings.json.
+test-hooks:
+	@scripts/test-hooks.sh
+
+# Which requirement IDs of a module are tested? Usage: make spec-coverage MOD=FEE
+spec-coverage:
+	@scripts/spec-coverage.sh $(MOD)
 
 tools:
 	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)

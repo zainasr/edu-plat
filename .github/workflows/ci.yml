@@ -40,5 +40,6 @@ jobs:
         run: |
           psql "postgresql://app:app@localhost:5432/app_dev" -v ON_ERROR_STOP=1 -f deploy/db/roles.sql
           make migrate
-      - name: Checks (lint, vet, unit and integration tests)
-        run: make check
+      - name: Evaluation (lint, tests, invariants, scratch migrations, hooks, secrets)
+        # The same gates agents run locally with `make evaluate`. One definition of "good".
+        run: make evaluate
