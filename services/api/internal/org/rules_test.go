@@ -2,6 +2,7 @@ package org
 
 import (
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -115,6 +116,40 @@ func TestREQ_ORG_005_SectionRules(t *testing.T) {
 			}
 			if !has(fieldsOf(err), tt.wantField) {
 				t.Fatalf("fields = %v, want %q", fieldsOf(err), tt.wantField)
+			}
+		})
+	}
+}
+
+// Boundaries: the longest allowed name passes and one character more fails. Found by a mutation
+// check: changing a limit by one used to go unnoticed.
+func TestREQ_ORG_NameLengthBoundaries(t *testing.T) {
+	const classID = "5c9c6c26-e0e4-4938-af5c-f6fc35688270"
+	tests := []struct {
+		name      string
+		validate  func(n string) error
+		maxLength int
+	}{
+		{"session name", func(n string) error {
+			_, err := validateSession(SessionInput{Name: n, StartsOn: date(2026, 4, 1), EndsOn: date(2027, 3, 31)})
+			return err
+		}, 40},
+		{"class name", func(n string) error {
+			_, err := validateClass(ClassInput{Name: n, GradeLevel: 5})
+			return err
+		}, 40},
+		{"section name", func(n string) error {
+			_, err := validateSection(SectionInput{ClassID: classID, Name: n, Shift: "morning"})
+			return err
+		}, 20},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.validate(strings.Repeat("x", tt.maxLength)); err != nil {
+				t.Fatalf("%d characters should be allowed: %v", tt.maxLength, err)
+			}
+			if err := tt.validate(strings.Repeat("x", tt.maxLength+1)); err == nil {
+				t.Fatalf("%d characters should be refused", tt.maxLength+1)
 			}
 		})
 	}
