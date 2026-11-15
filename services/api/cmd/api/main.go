@@ -62,7 +62,7 @@ func run() error {
 	setup := fees.NewService(pool, structure, enrolment, books)
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           api.Handler(api.NewServer(identity, structure, enrolment, books, setup), identity),
+		Handler:           api.Handler(api.NewServer(identity, structure, enrolment, books, setup), identity, api.WithIdempotency(pool)),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/zainasr/edu-plat/services/api/internal/api"
+	"github.com/zainasr/edu-plat/services/api/internal/platform/idempotency"
 )
 
 // tenantTablesSQL lists every table in the public schema that has a tenant_id column.
@@ -183,10 +184,11 @@ func TestINV_HistoryTablesAreAppendOnly(t *testing.T) {
 
 // operation is one OpenAPI operation read from api/openapi/openapi.yaml.
 type operation struct {
-	ID     string
-	Method string
-	Path   string
-	Public bool
+	ID         string
+	Method     string
+	Path       string
+	Public     bool
+	Idempotent bool // declares the Idempotency-Key header
 }
 
 var (
@@ -228,6 +230,9 @@ func readOperations(t *testing.T) []operation {
 		}
 		if strings.TrimSpace(line) == "security: []" && strings.HasPrefix(line, "      security:") {
 			ops[cur].Public = true
+		}
+		if strings.Contains(line, "#/components/parameters/IdempotencyKey") {
+			ops[cur].Idempotent = true
 		}
 	}
 	// Self-check: the parser must find exactly as many operations as the file declares. A silent
@@ -299,4 +304,34 @@ func TestINV_EveryOperationRequiresAuthAndAPermission(t *testing.T) {
 			}
 		})
 	}
+}
+
+// REQ-API-010: the operations that declare the Idempotency-Key header in the contract are exactly the
+// routes the middleware honours. Add a header to an operation without listing it (or the reverse) and
+// the client is promised something the server does not do.
+func TestINV_IdempotencyOperationsMatchTheContract(t *testing.T) {
+	var declared []string
+	for _, op := range readOperations(t) {
+		if op.Idempotent {
+			declared = append(declared, op.Method+" "+op.Path)
+		}
+	}
+	if len(declared) == 0 {
+		t.Fatal("no operation declares the Idempotency-Key header; the parser may be broken")
+	}
+	var bad []string
+	for _, d := range declared {
+		if !slices.Contains(idempotency.Operations, d) {
+			bad = append(bad, d+": declares the header but the middleware does not honour it")
+		}
+	}
+	for _, o := range idempotency.Operations {
+		if !slices.Contains(declared, o) {
+			bad = append(bad, o+": honoured by the middleware but the contract does not declare the header")
+		}
+		if !strings.HasPrefix(o, "POST ") {
+			bad = append(bad, o+": only POST can be idempotent here")
+		}
+	}
+	requireNone(t, bad, "Idempotency-Key must match between the contract and the middleware")
 }

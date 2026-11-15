@@ -4,22 +4,50 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/zainasr/edu-plat/services/api/internal/api/gen"
 	"github.com/zainasr/edu-plat/services/api/internal/iam"
 	"github.com/zainasr/edu-plat/services/api/internal/platform/apperr"
 	"github.com/zainasr/edu-plat/services/api/internal/platform/httpx"
+	"github.com/zainasr/edu-plat/services/api/internal/platform/idempotency"
 )
+
+// Option changes how Handler is built.
+type Option func(*handlerConfig)
+
+type handlerConfig struct {
+	idempotencyPool *pgxpool.Pool
+}
+
+// WithIdempotency makes the routes listed in idempotency.Operations honour an Idempotency-Key
+// (REQ-API-010). The server always passes it; without it a key is ignored.
+func WithIdempotency(pool *pgxpool.Pool) Option {
+	return func(c *handlerConfig) { c.idempotencyPool = pool }
+}
 
 // Handler builds the full HTTP handler: generated routes, the one error mapping,
 // token authentication, request IDs and access logs. Order matters: the request ID
 // is set first so every later log line and error carries it.
-func Handler(s *Server, identity *iam.Service) http.Handler {
+func Handler(s *Server, identity *iam.Service, opts ...Option) http.Handler {
+	var cfg handlerConfig
+	for _, o := range opts {
+		o(&cfg)
+	}
 	strict := gen.NewStrictHandlerWithOptions(s, nil, gen.StrictHTTPServerOptions{
 		RequestErrorHandlerFunc:  httpx.BadRequest,
 		ResponseErrorHandlerFunc: httpx.WriteError,
 	})
+	var middlewares []gen.MiddlewareFunc
+	if cfg.idempotencyPool != nil {
+		middlewares = append(middlewares, idempotency.New(cfg.idempotencyPool, func(r *http.Request) (string, string, bool) {
+			p, ok := iam.From(r.Context())
+			return p.TenantID, p.UserID, ok
+		}))
+	}
 	routes := gen.HandlerWithOptions(strict, gen.StdHTTPServerOptions{
 		BaseRouter:       http.NewServeMux(),
+		Middlewares:      middlewares,
 		ErrorHandlerFunc: httpx.BadRequest,
 	})
 	return httpx.RequestID(httpx.AccessLog(authenticate(identity, routes)))
