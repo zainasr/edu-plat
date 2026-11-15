@@ -185,6 +185,7 @@ func (s *Service) Authenticate(ctx context.Context, token string) (Principal, er
 			MembershipID: rec.MembershipID,
 			TokenID:      rec.TokenID,
 			TokenKind:    rec.Kind,
+			roles:        roles,
 			permissions:  permissionsFor(roles),
 		}
 		return nil

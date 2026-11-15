@@ -60,6 +60,14 @@ func TestREQ_IAM_005_BuiltInRolesHoldTheirPermissions(t *testing.T) {
 		{"student.view: list students", http.MethodGet, "/api/v1/students", "", true, false, true},
 		{"student.create: enrol a student", http.MethodPost, "/api/v1/students", `{}`, true, false, false},
 		{"org.manage: create class", http.MethodPost, "/api/v1/classes", `{}`, true, false, false},
+		{"user.view: list roles", http.MethodGet, "/api/v1/roles", "", true, false, false},
+		{"user.view: list staff", http.MethodGet, "/api/v1/staff", "", true, false, false},
+		{"user.view: get staff", http.MethodGet, "/api/v1/staff/" + id, "", true, false, false},
+		{"user.manage: add staff", http.MethodPost, "/api/v1/staff", `{}`, true, false, false},
+		{"role.manage: give a role", http.MethodPost, "/api/v1/staff/" + id + "/roles", `{"role":"accountant"}`, true, false, false},
+		{"role.manage: take a role", http.MethodPost, "/api/v1/staff/" + id + "/roles/accountant/revoke", "", true, false, false},
+		{"user.manage: deactivate", http.MethodPost, "/api/v1/staff/" + id + "/deactivate", "", true, false, false},
+		{"user.manage: reactivate", http.MethodPost, "/api/v1/staff/" + id + "/reactivate", "", true, false, false},
 	}
 	for _, e := range endpoints {
 		for role, want := range map[string]bool{"owner": e.owner, "accountant": e.accountant, "receptionist": e.receptionist} {

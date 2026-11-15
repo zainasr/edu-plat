@@ -207,12 +207,15 @@ type JournalLine struct {
 }
 
 type Membership struct {
-	ID        pgtype.UUID
-	TenantID  pgtype.UUID
-	UserID    pgtype.UUID
-	Status    string
-	CreatedAt pgtype.Timestamptz
-	CreatedBy pgtype.UUID
+	ID            pgtype.UUID
+	TenantID      pgtype.UUID
+	UserID        pgtype.UUID
+	Status        string
+	CreatedAt     pgtype.Timestamptz
+	CreatedBy     pgtype.UUID
+	DisplayName   pgtype.Text
+	DeactivatedAt pgtype.Timestamptz
+	DeactivatedBy pgtype.UUID
 }
 
 type OtpChallenge struct {
@@ -232,6 +235,8 @@ type RoleAssignment struct {
 	Role         string
 	CreatedAt    pgtype.Timestamptz
 	CreatedBy    pgtype.UUID
+	RevokedAt    pgtype.Timestamptz
+	RevokedBy    pgtype.UUID
 }
 
 type Section struct {
