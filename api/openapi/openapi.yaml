@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Education Platform API
-  version: 0.5.0
+  version: 0.6.0
   description: Source of truth for every capability (DEC-004). Edit this first, then the code.
 # Infrastructure endpoints (health) sit at the root for the load balancer.
 # Product endpoints carry their version in the path, for example /api/v1/students.
@@ -740,6 +740,155 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
 
+  /api/v1/challans/generate:
+    post:
+      operationId: generateChallans
+      tags: [fees]
+      summary: Draft the month's challans for every billable student (or preview them)
+      description: |
+        Requires `fee.generate`. For each student with an active enrolment, builds a draft challan from
+        the fee structure for `month`: monthly lines always, one-time lines in the month of the student's
+        first enrolment, annual lines in the month of year the plan line first took effect, ad hoc lines
+        never. A student who already has a non-void challan for the month is skipped ("has_challan"), so
+        running it again is safe. With `dry_run` nothing is written and each student shows whether a
+        challan "will_generate". Drafts post nothing to the ledger; release does.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GenerateChallans" }
+      responses:
+        "200":
+          description: What was (or would be) generated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GenerateChallansResult" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/challans/release:
+    post:
+      operationId: releaseChallans
+      tags: [fees]
+      summary: Release draft challans in bulk
+      description: |
+        Requires `fee.release`. All or nothing. Each challan gets a gapless challan number and a consumer
+        number, becomes read-only for ever (BR-FEE-001), and posts its receivable in the same transaction:
+        debit Fee Receivable, credit Fee Income (BR-FEE-008). A challan that is not a draft makes the
+        whole request fail with `challans.not_draft`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReleaseChallans" }
+      responses:
+        "200":
+          description: The released challans
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChallanList" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/challans:
+    get:
+      operationId: listChallans
+      tags: [fees]
+      summary: List challans (cursor paginated, newest first)
+      description: Requires `fee.view`.
+      parameters:
+        - name: month
+          in: query
+          required: false
+          description: Any date in the month to list.
+          schema: { type: string, format: date }
+        - name: status
+          in: query
+          required: false
+          schema: { $ref: "#/components/schemas/ChallanStatus" }
+        - name: student_id
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: cursor
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: A page of challans
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChallanPage" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/challans/{challanId}:
+    get:
+      operationId: getChallan
+      tags: [fees]
+      summary: One challan with its lines
+      description: Requires `fee.view`.
+      parameters:
+        - name: challanId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: The challan
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Challan" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/challans/{challanId}/void:
+    post:
+      operationId: voidChallan
+      tags: [fees]
+      summary: Void a draft challan
+      description: |
+        Requires `fee.generate`. Drafts only; the student can then be generated again. A released
+        challan is never edited or voided here (BR-FEE-001): its void is a ledger reversal and comes
+        with payments.
+      parameters:
+        - name: challanId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/VoidChallan" }
+      responses:
+        "200":
+          description: The voided challan
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Challan" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1363,3 +1512,123 @@ components:
         lines:
           type: array
           items: { $ref: "#/components/schemas/FeeLine" }
+
+    ChallanStatus:
+      type: string
+      enum: [draft, released, void]
+
+    GenerateChallans:
+      type: object
+      required: [month]
+      properties:
+        month:
+          type: string
+          format: date
+          description: Any date in the month to bill.
+        due_date:
+          type: string
+          format: date
+          description: Defaults to the 10th of the month. Must not be before the month starts.
+        dry_run:
+          type: boolean
+          default: false
+
+    GenerateOutcome:
+      type: string
+      enum: [will_generate, generated, has_challan, nothing_to_bill]
+
+    GenerateItem:
+      type: object
+      required: [student_id, student_name, registration_no, outcome, new_admission, total]
+      properties:
+        student_id: { type: string, format: uuid }
+        student_name: { type: string }
+        registration_no: { type: string }
+        outcome: { $ref: "#/components/schemas/GenerateOutcome" }
+        new_admission:
+          type: boolean
+          description: True when the month is the student's first enrolment month (for the review exceptions list).
+        total: { $ref: "#/components/schemas/Money" }
+        challan_id: { type: string, format: uuid, nullable: true }
+
+    GenerateChallansResult:
+      type: object
+      required: [month, due_date, dry_run, generated, items]
+      properties:
+        month: { type: string, format: date }
+        due_date: { type: string, format: date }
+        dry_run: { type: boolean }
+        generated: { type: integer, description: Number of drafts written (0 for a dry run). }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/GenerateItem" }
+
+    ReleaseChallans:
+      type: object
+      required: [challan_ids]
+      properties:
+        challan_ids:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items: { type: string, format: uuid }
+
+    VoidChallan:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 1, maxLength: 300 }
+
+    ChallanLine:
+      type: object
+      required: [fee_type_id, fee_type_name, kind, frequency, amount]
+      properties:
+        fee_type_id: { type: string, format: uuid }
+        fee_type_name: { type: string }
+        kind: { $ref: "#/components/schemas/FeeKind" }
+        frequency: { $ref: "#/components/schemas/FeeFrequency" }
+        amount: { $ref: "#/components/schemas/Money" }
+
+    Challan:
+      type: object
+      required: [id, student_id, family_id, month, due_date, status, total, lines, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        student_id: { type: string, format: uuid }
+        family_id: { type: string, format: uuid }
+        month: { type: string, format: date }
+        due_date: { type: string, format: date }
+        status: { $ref: "#/components/schemas/ChallanStatus" }
+        total: { $ref: "#/components/schemas/Money" }
+        challan_no:
+          type: integer
+          format: int64
+          nullable: true
+          description: Gapless, set at release.
+        consumer_no:
+          type: string
+          nullable: true
+          description: 14 digits, set at release (ADR-0017).
+        lines:
+          type: array
+          items: { $ref: "#/components/schemas/ChallanLine" }
+        released_at: { type: string, format: date-time, nullable: true }
+        void_reason: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+
+    ChallanList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Challan" }
+
+    ChallanPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Challan" }
+        next_cursor: { type: string, nullable: true }

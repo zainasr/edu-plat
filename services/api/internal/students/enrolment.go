@@ -302,3 +302,50 @@ func currentOf(list []Enrolment) *Enrolment {
 func dateOnly(t time.Time) time.Time {
 	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
 }
+
+// BillableStudent is what the fees module needs to bill one student for a month.
+type BillableStudent struct {
+	ID              string
+	FamilyID        string
+	RegistrationNo  string
+	FullName        string
+	ClassID         string
+	FirstEnrolledOn time.Time
+}
+
+// BillableStudents lists active students whose current enrolment began on or before the given day,
+// with their class and the date of their first enrolment. It runs inside the caller's open tenant
+// transaction. Deactivated students are left out (BR-FEE-006); their dues stay collectable.
+func (s *Service) BillableStudents(ctx context.Context, tx pgx.Tx, tenantID string, onOrBefore time.Time) ([]BillableStudent, error) {
+	tenant, err := db.ParseUUID(tenantID)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := gen.New(tx).ListBillableStudents(ctx, gen.ListBillableStudentsParams{
+		TenantID:   tenant,
+		OnOrBefore: pgtype.Date{Time: onOrBefore, Valid: true},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list billable students: %w", err)
+	}
+	sectionIDs := make([]string, 0, len(rows))
+	for _, r := range rows {
+		sectionIDs = append(sectionIDs, db.UUIDString(r.SectionID))
+	}
+	sections, err := s.org.DescribeSections(ctx, tx, tenantID, sectionIDs)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]BillableStudent, 0, len(rows))
+	for _, r := range rows {
+		section, ok := sections[db.UUIDString(r.SectionID)]
+		if !ok {
+			return nil, fmt.Errorf("enrolment points at section %s, which org cannot find", db.UUIDString(r.SectionID))
+		}
+		out = append(out, BillableStudent{
+			ID: db.UUIDString(r.ID), FamilyID: db.UUIDString(r.FamilyID), RegistrationNo: r.RegistrationNo,
+			FullName: r.FullName, ClassID: section.ClassID, FirstEnrolledOn: r.FirstStartedOn.Time,
+		})
+	}
+	return out, nil
+}

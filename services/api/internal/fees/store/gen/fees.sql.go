@@ -68,6 +68,91 @@ func (q *Queries) EnsureDefaultFeeTypes(ctx context.Context, tenantID pgtype.UUI
 	return err
 }
 
+const firstVersionMonths = `-- name: FirstVersionMonths :many
+SELECT fee_type_id, min(effective_from)::date AS first_from
+FROM fee_plan_lines
+WHERE tenant_id = $1 AND class_id = $2
+GROUP BY fee_type_id
+`
+
+type FirstVersionMonthsParams struct {
+	TenantID pgtype.UUID
+	ClassID  pgtype.UUID
+}
+
+type FirstVersionMonthsRow struct {
+	FeeTypeID pgtype.UUID
+	FirstFrom pgtype.Date
+}
+
+// When each fee type first took effect on a class plan: it anchors annual fees to a month of the year.
+func (q *Queries) FirstVersionMonths(ctx context.Context, arg FirstVersionMonthsParams) ([]FirstVersionMonthsRow, error) {
+	rows, err := q.db.Query(ctx, firstVersionMonths, arg.TenantID, arg.ClassID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []FirstVersionMonthsRow
+	for rows.Next() {
+		var i FirstVersionMonthsRow
+		if err := rows.Scan(&i.FeeTypeID, &i.FirstFrom); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getChallan = `-- name: GetChallan :one
+SELECT id, student_id, family_id, month, due_date, status, total, challan_no, consumer_no,
+       released_at, void_reason, created_at
+FROM challans
+WHERE tenant_id = $1 AND id = $2
+`
+
+type GetChallanParams struct {
+	TenantID pgtype.UUID
+	ID       pgtype.UUID
+}
+
+type GetChallanRow struct {
+	ID         pgtype.UUID
+	StudentID  pgtype.UUID
+	FamilyID   pgtype.UUID
+	Month      pgtype.Date
+	DueDate    pgtype.Date
+	Status     string
+	Total      int64
+	ChallanNo  pgtype.Int8
+	ConsumerNo pgtype.Text
+	ReleasedAt pgtype.Timestamptz
+	VoidReason pgtype.Text
+	CreatedAt  pgtype.Timestamptz
+}
+
+func (q *Queries) GetChallan(ctx context.Context, arg GetChallanParams) (GetChallanRow, error) {
+	row := q.db.QueryRow(ctx, getChallan, arg.TenantID, arg.ID)
+	var i GetChallanRow
+	err := row.Scan(
+		&i.ID,
+		&i.StudentID,
+		&i.FamilyID,
+		&i.Month,
+		&i.DueDate,
+		&i.Status,
+		&i.Total,
+		&i.ChallanNo,
+		&i.ConsumerNo,
+		&i.ReleasedAt,
+		&i.VoidReason,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getFeeType = `-- name: GetFeeType :one
 SELECT id, code, name, kind, is_deposit, status
 FROM fee_types
@@ -100,6 +185,71 @@ func (q *Queries) GetFeeType(ctx context.Context, arg GetFeeTypeParams) (GetFeeT
 		&i.Status,
 	)
 	return i, err
+}
+
+const insertChallan = `-- name: InsertChallan :one
+INSERT INTO challans (tenant_id, student_id, family_id, month, due_date, total, created_by)
+VALUES ($1, $2, $3, $4,
+        $5, $6, $7)
+ON CONFLICT (tenant_id, student_id, month) WHERE status <> 'void' DO NOTHING
+RETURNING id
+`
+
+type InsertChallanParams struct {
+	TenantID  pgtype.UUID
+	StudentID pgtype.UUID
+	FamilyID  pgtype.UUID
+	Month     pgtype.Date
+	DueDate   pgtype.Date
+	Total     int64
+	CreatedBy pgtype.UUID
+}
+
+// DO NOTHING on the one-live-challan-per-month index: a student who already has one returns no row.
+func (q *Queries) InsertChallan(ctx context.Context, arg InsertChallanParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, insertChallan,
+		arg.TenantID,
+		arg.StudentID,
+		arg.FamilyID,
+		arg.Month,
+		arg.DueDate,
+		arg.Total,
+		arg.CreatedBy,
+	)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
+const insertChallanLine = `-- name: InsertChallanLine :exec
+INSERT INTO challan_lines (tenant_id, challan_id, line_no, fee_type_id, fee_type_name, kind, frequency, amount)
+VALUES ($1, $2, $3, $4,
+        $5, $6, $7, $8)
+`
+
+type InsertChallanLineParams struct {
+	TenantID    pgtype.UUID
+	ChallanID   pgtype.UUID
+	LineNo      int32
+	FeeTypeID   pgtype.UUID
+	FeeTypeName string
+	Kind        string
+	Frequency   string
+	Amount      int64
+}
+
+func (q *Queries) InsertChallanLine(ctx context.Context, arg InsertChallanLineParams) error {
+	_, err := q.db.Exec(ctx, insertChallanLine,
+		arg.TenantID,
+		arg.ChallanID,
+		arg.LineNo,
+		arg.FeeTypeID,
+		arg.FeeTypeName,
+		arg.Kind,
+		arg.Frequency,
+		arg.Amount,
+	)
+	return err
 }
 
 const insertFeeType = `-- name: InsertFeeType :one
@@ -219,6 +369,137 @@ func (q *Queries) InsertPlanLine(ctx context.Context, arg InsertPlanLineParams) 
 	var id pgtype.UUID
 	err := row.Scan(&id)
 	return id, err
+}
+
+const listChallanLines = `-- name: ListChallanLines :many
+SELECT challan_id, line_no, fee_type_id, fee_type_name, kind, frequency, amount
+FROM challan_lines
+WHERE tenant_id = $1 AND challan_id = ANY($2::uuid[])
+ORDER BY challan_id, line_no
+`
+
+type ListChallanLinesParams struct {
+	TenantID   pgtype.UUID
+	ChallanIds []pgtype.UUID
+}
+
+type ListChallanLinesRow struct {
+	ChallanID   pgtype.UUID
+	LineNo      int32
+	FeeTypeID   pgtype.UUID
+	FeeTypeName string
+	Kind        string
+	Frequency   string
+	Amount      int64
+}
+
+func (q *Queries) ListChallanLines(ctx context.Context, arg ListChallanLinesParams) ([]ListChallanLinesRow, error) {
+	rows, err := q.db.Query(ctx, listChallanLines, arg.TenantID, arg.ChallanIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListChallanLinesRow
+	for rows.Next() {
+		var i ListChallanLinesRow
+		if err := rows.Scan(
+			&i.ChallanID,
+			&i.LineNo,
+			&i.FeeTypeID,
+			&i.FeeTypeName,
+			&i.Kind,
+			&i.Frequency,
+			&i.Amount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listChallansPage = `-- name: ListChallansPage :many
+SELECT id, student_id, family_id, month, due_date, status, total, challan_no, consumer_no,
+       released_at, void_reason, created_at
+FROM challans
+WHERE tenant_id = $1
+  AND ($2::date IS NULL OR month = $2::date)
+  AND ($3::text IS NULL OR status = $3::text)
+  AND ($4::uuid IS NULL OR student_id = $4::uuid)
+  AND ($5::timestamptz IS NULL
+       OR (created_at, id) < ($5::timestamptz, $6::uuid))
+ORDER BY created_at DESC, id DESC
+LIMIT $7
+`
+
+type ListChallansPageParams struct {
+	TenantID       pgtype.UUID
+	Month          pgtype.Date
+	Status         pgtype.Text
+	StudentID      pgtype.UUID
+	AfterCreatedAt pgtype.Timestamptz
+	AfterID        pgtype.UUID
+	PageLimit      int32
+}
+
+type ListChallansPageRow struct {
+	ID         pgtype.UUID
+	StudentID  pgtype.UUID
+	FamilyID   pgtype.UUID
+	Month      pgtype.Date
+	DueDate    pgtype.Date
+	Status     string
+	Total      int64
+	ChallanNo  pgtype.Int8
+	ConsumerNo pgtype.Text
+	ReleasedAt pgtype.Timestamptz
+	VoidReason pgtype.Text
+	CreatedAt  pgtype.Timestamptz
+}
+
+// Keyset pagination on (created_at, id), newest first. A NULL cursor or filter means "no condition".
+func (q *Queries) ListChallansPage(ctx context.Context, arg ListChallansPageParams) ([]ListChallansPageRow, error) {
+	rows, err := q.db.Query(ctx, listChallansPage,
+		arg.TenantID,
+		arg.Month,
+		arg.Status,
+		arg.StudentID,
+		arg.AfterCreatedAt,
+		arg.AfterID,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListChallansPageRow
+	for rows.Next() {
+		var i ListChallansPageRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.StudentID,
+			&i.FamilyID,
+			&i.Month,
+			&i.DueDate,
+			&i.Status,
+			&i.Total,
+			&i.ChallanNo,
+			&i.ConsumerNo,
+			&i.ReleasedAt,
+			&i.VoidReason,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listFeeTypes = `-- name: ListFeeTypes :many
@@ -365,4 +646,127 @@ func (q *Queries) ListPlanVersions(ctx context.Context, arg ListPlanVersionsPara
 		return nil, err
 	}
 	return items, nil
+}
+
+const liveChallanStudents = `-- name: LiveChallanStudents :many
+SELECT student_id
+FROM challans
+WHERE tenant_id = $1 AND month = $2 AND status <> 'void'
+`
+
+type LiveChallanStudentsParams struct {
+	TenantID pgtype.UUID
+	Month    pgtype.Date
+}
+
+// Students who already have a draft or released challan for the month.
+func (q *Queries) LiveChallanStudents(ctx context.Context, arg LiveChallanStudentsParams) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, liveChallanStudents, arg.TenantID, arg.Month)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []pgtype.UUID
+	for rows.Next() {
+		var student_id pgtype.UUID
+		if err := rows.Scan(&student_id); err != nil {
+			return nil, err
+		}
+		items = append(items, student_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const lockChallan = `-- name: LockChallan :one
+SELECT id, status
+FROM challans
+WHERE tenant_id = $1 AND id = $2
+FOR UPDATE
+`
+
+type LockChallanParams struct {
+	TenantID pgtype.UUID
+	ID       pgtype.UUID
+}
+
+type LockChallanRow struct {
+	ID     pgtype.UUID
+	Status string
+}
+
+// Takes the row lock, so two releases of the same challan run one after the other.
+func (q *Queries) LockChallan(ctx context.Context, arg LockChallanParams) (LockChallanRow, error) {
+	row := q.db.QueryRow(ctx, lockChallan, arg.TenantID, arg.ID)
+	var i LockChallanRow
+	err := row.Scan(&i.ID, &i.Status)
+	return i, err
+}
+
+const nextChallanNo = `-- name: NextChallanNo :one
+INSERT INTO tenant_counters (tenant_id, name, value)
+VALUES ($1, 'challan', 1)
+ON CONFLICT (tenant_id, name) DO UPDATE SET value = tenant_counters.value + 1
+RETURNING value
+`
+
+// Gapless: the counter moves inside the release transaction, so a rolled-back release gives its
+// number back.
+func (q *Queries) NextChallanNo(ctx context.Context, tenantID pgtype.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, nextChallanNo, tenantID)
+	var value int64
+	err := row.Scan(&value)
+	return value, err
+}
+
+const releaseChallan = `-- name: ReleaseChallan :one
+UPDATE challans
+SET status = 'released', challan_no = $1, consumer_no = $2,
+    released_at = now(), released_by = $3
+WHERE tenant_id = $4 AND id = $5 AND status = 'draft'
+RETURNING id
+`
+
+type ReleaseChallanParams struct {
+	ChallanNo  pgtype.Int8
+	ConsumerNo pgtype.Text
+	ReleasedBy pgtype.UUID
+	TenantID   pgtype.UUID
+	ID         pgtype.UUID
+}
+
+// Conditional on draft: with the row lock taken first, this cannot run twice for one challan.
+func (q *Queries) ReleaseChallan(ctx context.Context, arg ReleaseChallanParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, releaseChallan,
+		arg.ChallanNo,
+		arg.ConsumerNo,
+		arg.ReleasedBy,
+		arg.TenantID,
+		arg.ID,
+	)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
+const voidChallan = `-- name: VoidChallan :one
+UPDATE challans
+SET status = 'void', void_reason = $1, voided_at = now()
+WHERE tenant_id = $2 AND id = $3 AND status = 'draft'
+RETURNING id
+`
+
+type VoidChallanParams struct {
+	Reason   pgtype.Text
+	TenantID pgtype.UUID
+	ID       pgtype.UUID
+}
+
+func (q *Queries) VoidChallan(ctx context.Context, arg VoidChallanParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, voidChallan, arg.Reason, arg.TenantID, arg.ID)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
 }

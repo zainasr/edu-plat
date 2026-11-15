@@ -294,6 +294,60 @@ func (q *Queries) InsertStudent(ctx context.Context, arg InsertStudentParams) (I
 	return i, err
 }
 
+const listBillableStudents = `-- name: ListBillableStudents :many
+SELECT s.id, s.registration_no, s.full_name, s.family_id, e.section_id,
+       (SELECT min(x.started_on) FROM enrolments x
+         WHERE x.tenant_id = s.tenant_id AND x.student_id = s.id)::date AS first_started_on
+FROM students s
+JOIN enrolments e ON e.tenant_id = s.tenant_id AND e.student_id = s.id AND e.status = 'active'
+WHERE s.tenant_id = $1 AND s.status = 'active'
+  AND e.started_on <= $2::date
+ORDER BY s.registration_no, s.id
+`
+
+type ListBillableStudentsParams struct {
+	TenantID   pgtype.UUID
+	OnOrBefore pgtype.Date
+}
+
+type ListBillableStudentsRow struct {
+	ID             pgtype.UUID
+	RegistrationNo string
+	FullName       string
+	FamilyID       pgtype.UUID
+	SectionID      pgtype.UUID
+	FirstStartedOn pgtype.Date
+}
+
+// Active students with an active enrolment that began on or before the given date, with the date
+// of their first ever enrolment (it decides when one-time fees fall due). Used by fees.
+func (q *Queries) ListBillableStudents(ctx context.Context, arg ListBillableStudentsParams) ([]ListBillableStudentsRow, error) {
+	rows, err := q.db.Query(ctx, listBillableStudents, arg.TenantID, arg.OnOrBefore)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListBillableStudentsRow
+	for rows.Next() {
+		var i ListBillableStudentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.RegistrationNo,
+			&i.FullName,
+			&i.FamilyID,
+			&i.SectionID,
+			&i.FirstStartedOn,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listEnrolmentsForStudents = `-- name: ListEnrolmentsForStudents :many
 SELECT id, student_id, session_id, section_id, status, started_on, ended_on, reason
 FROM enrolments

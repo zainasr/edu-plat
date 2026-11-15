@@ -56,6 +56,36 @@ type Branch struct {
 	CreatedBy pgtype.UUID
 }
 
+type Challan struct {
+	ID         pgtype.UUID
+	TenantID   pgtype.UUID
+	StudentID  pgtype.UUID
+	FamilyID   pgtype.UUID
+	Month      pgtype.Date
+	DueDate    pgtype.Date
+	Status     string
+	Total      int64
+	ChallanNo  pgtype.Int8
+	ConsumerNo pgtype.Text
+	ReleasedAt pgtype.Timestamptz
+	ReleasedBy pgtype.UUID
+	VoidReason pgtype.Text
+	VoidedAt   pgtype.Timestamptz
+	CreatedAt  pgtype.Timestamptz
+	CreatedBy  pgtype.UUID
+}
+
+type ChallanLine struct {
+	TenantID    pgtype.UUID
+	ChallanID   pgtype.UUID
+	LineNo      int32
+	FeeTypeID   pgtype.UUID
+	FeeTypeName string
+	Kind        string
+	Frequency   string
+	Amount      int64
+}
+
 type Class struct {
 	ID         pgtype.UUID
 	TenantID   pgtype.UUID

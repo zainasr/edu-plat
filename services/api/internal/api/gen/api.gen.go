@@ -18,6 +18,27 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for ChallanStatus.
+const (
+	Draft    ChallanStatus = "draft"
+	Released ChallanStatus = "released"
+	Void     ChallanStatus = "void"
+)
+
+// Valid indicates whether the value is a known member of the ChallanStatus enum.
+func (e ChallanStatus) Valid() bool {
+	switch e {
+	case Draft:
+		return true
+	case Released:
+		return true
+	case Void:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ClassStatus.
 const (
 	ClassStatusActive   ClassStatus = "active"
@@ -174,6 +195,30 @@ func (e Gender) Valid() bool {
 	case GenderMale:
 		return true
 	case GenderOther:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GenerateOutcome.
+const (
+	Generated     GenerateOutcome = "generated"
+	HasChallan    GenerateOutcome = "has_challan"
+	NothingToBill GenerateOutcome = "nothing_to_bill"
+	WillGenerate  GenerateOutcome = "will_generate"
+)
+
+// Valid indicates whether the value is a known member of the GenerateOutcome enum.
+func (e GenerateOutcome) Valid() bool {
+	switch e {
+	case Generated:
+		return true
+	case HasChallan:
+		return true
+	case NothingToBill:
+		return true
+	case WillGenerate:
 		return true
 	default:
 		return false
@@ -359,6 +404,56 @@ type AcademicSessionList struct {
 	Items []AcademicSession `json:"items"`
 }
 
+// Challan defines model for Challan.
+type Challan struct {
+	// ChallanNo Gapless, set at release.
+	ChallanNo *int64 `json:"challan_no,omitempty"`
+
+	// ConsumerNo 14 digits, set at release (ADR-0017).
+	ConsumerNo *string            `json:"consumer_no,omitempty"`
+	CreatedAt  time.Time          `json:"created_at"`
+	DueDate    openapi_types.Date `json:"due_date"`
+	FamilyId   openapi_types.UUID `json:"family_id"`
+	Id         openapi_types.UUID `json:"id"`
+	Lines      []ChallanLine      `json:"lines"`
+	Month      openapi_types.Date `json:"month"`
+	ReleasedAt *time.Time         `json:"released_at,omitempty"`
+	Status     ChallanStatus      `json:"status"`
+	StudentId  openapi_types.UUID `json:"student_id"`
+
+	// Total An amount in minor units (paisa). Never a decimal or a float (API conventions §2).
+	Total      Money   `json:"total"`
+	VoidReason *string `json:"void_reason,omitempty"`
+}
+
+// ChallanLine defines model for ChallanLine.
+type ChallanLine struct {
+	// Amount An amount in minor units (paisa). Never a decimal or a float (API conventions §2).
+	Amount      Money              `json:"amount"`
+	FeeTypeId   openapi_types.UUID `json:"fee_type_id"`
+	FeeTypeName string             `json:"fee_type_name"`
+
+	// Frequency How often a plan line is charged. Quarterly and term are 1.1 (REQ-FEE-002).
+	Frequency FeeFrequency `json:"frequency"`
+
+	// Kind What a fee type is for. `security_deposit` is held for the family and is never income (BR-FEE-004).
+	Kind FeeKind `json:"kind"`
+}
+
+// ChallanList defines model for ChallanList.
+type ChallanList struct {
+	Items []Challan `json:"items"`
+}
+
+// ChallanPage defines model for ChallanPage.
+type ChallanPage struct {
+	Items      []Challan `json:"items"`
+	NextCursor *string   `json:"next_cursor,omitempty"`
+}
+
+// ChallanStatus defines model for ChallanStatus.
+type ChallanStatus string
+
 // ChangeSection defines model for ChangeSection.
 type ChangeSection struct {
 	// Reason Example: correction
@@ -540,6 +635,46 @@ type FeeTypeList struct {
 
 // Gender defines model for Gender.
 type Gender string
+
+// GenerateChallans defines model for GenerateChallans.
+type GenerateChallans struct {
+	DryRun *bool `json:"dry_run,omitempty"`
+
+	// DueDate Defaults to the 10th of the month. Must not be before the month starts.
+	DueDate *openapi_types.Date `json:"due_date,omitempty"`
+
+	// Month Any date in the month to bill.
+	Month openapi_types.Date `json:"month"`
+}
+
+// GenerateChallansResult defines model for GenerateChallansResult.
+type GenerateChallansResult struct {
+	DryRun  bool               `json:"dry_run"`
+	DueDate openapi_types.Date `json:"due_date"`
+
+	// Generated Number of drafts written (0 for a dry run).
+	Generated int                `json:"generated"`
+	Items     []GenerateItem     `json:"items"`
+	Month     openapi_types.Date `json:"month"`
+}
+
+// GenerateItem defines model for GenerateItem.
+type GenerateItem struct {
+	ChallanId *openapi_types.UUID `json:"challan_id,omitempty"`
+
+	// NewAdmission True when the month is the student's first enrolment month (for the review exceptions list).
+	NewAdmission   bool               `json:"new_admission"`
+	Outcome        GenerateOutcome    `json:"outcome"`
+	RegistrationNo string             `json:"registration_no"`
+	StudentId      openapi_types.UUID `json:"student_id"`
+	StudentName    string             `json:"student_name"`
+
+	// Total An amount in minor units (paisa). Never a decimal or a float (API conventions §2).
+	Total Money `json:"total"`
+}
+
+// GenerateOutcome defines model for GenerateOutcome.
+type GenerateOutcome string
 
 // GuardianAccess defines model for GuardianAccess.
 type GuardianAccess string
@@ -742,6 +877,11 @@ type PlanLineSet struct {
 // Relationship A guardian's relation to the student (REQ-STU-002).
 type Relationship string
 
+// ReleaseChallans defines model for ReleaseChallans.
+type ReleaseChallans struct {
+	ChallanIds []openapi_types.UUID `json:"challan_ids"`
+}
+
 // Section defines model for Section.
 type Section struct {
 	ClassId   openapi_types.UUID `json:"class_id"`
@@ -893,6 +1033,11 @@ type TrialBalanceLine struct {
 	Debit Money `json:"debit"`
 }
 
+// VoidChallan defines model for VoidChallan.
+type VoidChallan struct {
+	Reason string `json:"reason"`
+}
+
 // Conflict defines model for Conflict.
 type Conflict = ErrorEnvelope
 
@@ -916,6 +1061,16 @@ type Unauthenticated = ErrorEnvelope
 
 // ValidationError defines model for ValidationError.
 type ValidationError = ErrorEnvelope
+
+// ListChallansParams defines parameters for ListChallans.
+type ListChallansParams struct {
+	// Month Any date in the month to list.
+	Month     *openapi_types.Date `form:"month,omitempty" json:"month,omitempty"`
+	Status    *ChallanStatus      `form:"status,omitempty" json:"status,omitempty"`
+	StudentId *openapi_types.UUID `form:"student_id,omitempty" json:"student_id,omitempty"`
+	Limit     *int                `form:"limit,omitempty" json:"limit,omitempty"`
+	Cursor    *string             `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
 
 // GetFeePlanParams defines parameters for GetFeePlan.
 type GetFeePlanParams struct {
@@ -958,6 +1113,15 @@ type RequestOtpJSONRequestBody = OtpRequest
 // VerifyOtpJSONRequestBody defines body for VerifyOtp for application/json ContentType.
 type VerifyOtpJSONRequestBody = OtpVerify
 
+// GenerateChallansJSONRequestBody defines body for GenerateChallans for application/json ContentType.
+type GenerateChallansJSONRequestBody = GenerateChallans
+
+// ReleaseChallansJSONRequestBody defines body for ReleaseChallans for application/json ContentType.
+type ReleaseChallansJSONRequestBody = ReleaseChallans
+
+// VoidChallanJSONRequestBody defines body for VoidChallan for application/json ContentType.
+type VoidChallanJSONRequestBody = VoidChallan
+
 // CreateClassJSONRequestBody defines body for CreateClass for application/json ContentType.
 type CreateClassJSONRequestBody = ClassCreate
 
@@ -996,6 +1160,21 @@ type ServerInterface interface {
 	// VerifyOtp Exchange a one-time code for a session token in one tenant
 	// (POST /api/v1/auth/otp/verify)
 	VerifyOtp(w http.ResponseWriter, r *http.Request)
+	// ListChallans List challans (cursor paginated, newest first)
+	// (GET /api/v1/challans)
+	ListChallans(w http.ResponseWriter, r *http.Request, params ListChallansParams)
+	// GenerateChallans Draft the month's challans for every billable student (or preview them)
+	// (POST /api/v1/challans/generate)
+	GenerateChallans(w http.ResponseWriter, r *http.Request)
+	// ReleaseChallans Release draft challans in bulk
+	// (POST /api/v1/challans/release)
+	ReleaseChallans(w http.ResponseWriter, r *http.Request)
+	// GetChallan One challan with its lines
+	// (GET /api/v1/challans/{challanId})
+	GetChallan(w http.ResponseWriter, r *http.Request, challanId openapi_types.UUID)
+	// VoidChallan Void a draft challan
+	// (POST /api/v1/challans/{challanId}/void)
+	VoidChallan(w http.ResponseWriter, r *http.Request, challanId openapi_types.UUID)
 	// ListClasses List the classes, ordered by grade level
 	// (GET /api/v1/classes)
 	ListClasses(w http.ResponseWriter, r *http.Request)
@@ -1124,6 +1303,171 @@ func (siw *ServerInterfaceWrapper) VerifyOtp(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.VerifyOtp(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListChallans operation middleware
+func (siw *ServerInterfaceWrapper) ListChallans(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListChallansParams
+
+	// ------------- Optional query parameter "month" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "month", r.URL.Query(), &params.Month, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "month"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "month", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "status" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "status", r.URL.Query(), &params.Status, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "status"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "status", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "student_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "student_id", r.URL.Query(), &params.StudentId, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "student_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "student_id", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListChallans(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GenerateChallans operation middleware
+func (siw *ServerInterfaceWrapper) GenerateChallans(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GenerateChallans(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReleaseChallans operation middleware
+func (siw *ServerInterfaceWrapper) ReleaseChallans(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReleaseChallans(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetChallan operation middleware
+func (siw *ServerInterfaceWrapper) GetChallan(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "challanId" -------------
+	var challanId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "challanId", r.PathValue("challanId"), &challanId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "challanId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetChallan(w, r, challanId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// VoidChallan operation middleware
+func (siw *ServerInterfaceWrapper) VoidChallan(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "challanId" -------------
+	var challanId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "challanId", r.PathValue("challanId"), &challanId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "challanId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.VoidChallan(w, r, challanId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1978,6 +2322,11 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/students/{studentId}/fee-overrides", wrapper.ListFeeOverrides)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/students/{studentId}/fee-overrides", wrapper.SetFeeOverride)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/students/{studentId}/fee-structure", wrapper.GetFeeStructure)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/challans/generate", wrapper.GenerateChallans)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/challans/release", wrapper.ReleaseChallans)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/challans", wrapper.ListChallans)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/challans/{challanId}", wrapper.GetChallan)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/challans/{challanId}/void", wrapper.VoidChallan)
 
 	return m
 }
@@ -2178,6 +2527,453 @@ func (response VerifyOtp423JSONResponse) VisitVerifyOtpResponse(w http.ResponseW
 type VerifyOtp500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response VerifyOtp500JSONResponse) VisitVerifyOtpResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListChallansRequestObject struct {
+	Params ListChallansParams
+}
+
+type ListChallansResponseObject interface {
+	VisitListChallansResponse(w http.ResponseWriter) error
+}
+
+type ListChallans200JSONResponse ChallanPage
+
+func (response ListChallans200JSONResponse) VisitListChallansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListChallans400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response ListChallans400JSONResponse) VisitListChallansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListChallans401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ListChallans401JSONResponse) VisitListChallansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListChallans403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListChallans403JSONResponse) VisitListChallansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListChallans500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListChallans500JSONResponse) VisitListChallansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GenerateChallansRequestObject struct {
+	Body *GenerateChallansJSONRequestBody
+}
+
+type GenerateChallansResponseObject interface {
+	VisitGenerateChallansResponse(w http.ResponseWriter) error
+}
+
+type GenerateChallans200JSONResponse GenerateChallansResult
+
+func (response GenerateChallans200JSONResponse) VisitGenerateChallansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GenerateChallans400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response GenerateChallans400JSONResponse) VisitGenerateChallansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GenerateChallans401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response GenerateChallans401JSONResponse) VisitGenerateChallansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GenerateChallans403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GenerateChallans403JSONResponse) VisitGenerateChallansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GenerateChallans500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GenerateChallans500JSONResponse) VisitGenerateChallansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReleaseChallansRequestObject struct {
+	Body *ReleaseChallansJSONRequestBody
+}
+
+type ReleaseChallansResponseObject interface {
+	VisitReleaseChallansResponse(w http.ResponseWriter) error
+}
+
+type ReleaseChallans200JSONResponse ChallanList
+
+func (response ReleaseChallans200JSONResponse) VisitReleaseChallansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReleaseChallans400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response ReleaseChallans400JSONResponse) VisitReleaseChallansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReleaseChallans401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ReleaseChallans401JSONResponse) VisitReleaseChallansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReleaseChallans403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ReleaseChallans403JSONResponse) VisitReleaseChallansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReleaseChallans404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ReleaseChallans404JSONResponse) VisitReleaseChallansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReleaseChallans409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ReleaseChallans409JSONResponse) VisitReleaseChallansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReleaseChallans500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ReleaseChallans500JSONResponse) VisitReleaseChallansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetChallanRequestObject struct {
+	ChallanId openapi_types.UUID `json:"challanId"`
+}
+
+type GetChallanResponseObject interface {
+	VisitGetChallanResponse(w http.ResponseWriter) error
+}
+
+type GetChallan200JSONResponse Challan
+
+func (response GetChallan200JSONResponse) VisitGetChallanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetChallan401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response GetChallan401JSONResponse) VisitGetChallanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetChallan403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetChallan403JSONResponse) VisitGetChallanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetChallan404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetChallan404JSONResponse) VisitGetChallanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetChallan500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GetChallan500JSONResponse) VisitGetChallanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type VoidChallanRequestObject struct {
+	ChallanId openapi_types.UUID `json:"challanId"`
+	Body      *VoidChallanJSONRequestBody
+}
+
+type VoidChallanResponseObject interface {
+	VisitVoidChallanResponse(w http.ResponseWriter) error
+}
+
+type VoidChallan200JSONResponse Challan
+
+func (response VoidChallan200JSONResponse) VisitVoidChallanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type VoidChallan400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response VoidChallan400JSONResponse) VisitVoidChallanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type VoidChallan401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response VoidChallan401JSONResponse) VisitVoidChallanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type VoidChallan403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response VoidChallan403JSONResponse) VisitVoidChallanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type VoidChallan404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response VoidChallan404JSONResponse) VisitVoidChallanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type VoidChallan409JSONResponse struct{ ConflictJSONResponse }
+
+func (response VoidChallan409JSONResponse) VisitVoidChallanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type VoidChallan500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response VoidChallan500JSONResponse) VisitVoidChallanResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -4430,6 +5226,21 @@ type StrictServerInterface interface {
 	// VerifyOtp Exchange a one-time code for a session token in one tenant
 	// (POST /api/v1/auth/otp/verify)
 	VerifyOtp(ctx context.Context, request VerifyOtpRequestObject) (VerifyOtpResponseObject, error)
+	// ListChallans List challans (cursor paginated, newest first)
+	// (GET /api/v1/challans)
+	ListChallans(ctx context.Context, request ListChallansRequestObject) (ListChallansResponseObject, error)
+	// GenerateChallans Draft the month's challans for every billable student (or preview them)
+	// (POST /api/v1/challans/generate)
+	GenerateChallans(ctx context.Context, request GenerateChallansRequestObject) (GenerateChallansResponseObject, error)
+	// ReleaseChallans Release draft challans in bulk
+	// (POST /api/v1/challans/release)
+	ReleaseChallans(ctx context.Context, request ReleaseChallansRequestObject) (ReleaseChallansResponseObject, error)
+	// GetChallan One challan with its lines
+	// (GET /api/v1/challans/{challanId})
+	GetChallan(ctx context.Context, request GetChallanRequestObject) (GetChallanResponseObject, error)
+	// VoidChallan Void a draft challan
+	// (POST /api/v1/challans/{challanId}/void)
+	VoidChallan(ctx context.Context, request VoidChallanRequestObject) (VoidChallanResponseObject, error)
 	// ListClasses List the classes, ordered by grade level
 	// (GET /api/v1/classes)
 	ListClasses(ctx context.Context, request ListClassesRequestObject) (ListClassesResponseObject, error)
@@ -4634,6 +5445,153 @@ func (sh *strictHandler) VerifyOtp(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(VerifyOtpResponseObject); ok {
 		if err := validResponse.VisitVerifyOtpResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListChallans operation middleware
+func (sh *strictHandler) ListChallans(w http.ResponseWriter, r *http.Request, params ListChallansParams) {
+	var request ListChallansRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListChallans(ctx, request.(ListChallansRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListChallans")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListChallansResponseObject); ok {
+		if err := validResponse.VisitListChallansResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GenerateChallans operation middleware
+func (sh *strictHandler) GenerateChallans(w http.ResponseWriter, r *http.Request) {
+	var request GenerateChallansRequestObject
+
+	var body GenerateChallansJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GenerateChallans(ctx, request.(GenerateChallansRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GenerateChallans")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GenerateChallansResponseObject); ok {
+		if err := validResponse.VisitGenerateChallansResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReleaseChallans operation middleware
+func (sh *strictHandler) ReleaseChallans(w http.ResponseWriter, r *http.Request) {
+	var request ReleaseChallansRequestObject
+
+	var body ReleaseChallansJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReleaseChallans(ctx, request.(ReleaseChallansRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReleaseChallans")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReleaseChallansResponseObject); ok {
+		if err := validResponse.VisitReleaseChallansResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetChallan operation middleware
+func (sh *strictHandler) GetChallan(w http.ResponseWriter, r *http.Request, challanId openapi_types.UUID) {
+	var request GetChallanRequestObject
+
+	request.ChallanId = challanId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetChallan(ctx, request.(GetChallanRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetChallan")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetChallanResponseObject); ok {
+		if err := validResponse.VisitGetChallanResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// VoidChallan operation middleware
+func (sh *strictHandler) VoidChallan(w http.ResponseWriter, r *http.Request, challanId openapi_types.UUID) {
+	var request VoidChallanRequestObject
+
+	request.ChallanId = challanId
+
+	var body VoidChallanJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.VoidChallan(ctx, request.(VoidChallanRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "VoidChallan")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(VoidChallanResponseObject); ok {
+		if err := validResponse.VisitVoidChallanResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

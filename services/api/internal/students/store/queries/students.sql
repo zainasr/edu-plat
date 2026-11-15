@@ -89,3 +89,15 @@ SELECT id, student_id, session_id, section_id, status, started_on, ended_on, rea
 FROM enrolments
 WHERE tenant_id = sqlc.arg('tenant_id') AND student_id = ANY(sqlc.arg('student_ids')::uuid[])
 ORDER BY created_at DESC, id DESC;
+
+-- name: ListBillableStudents :many
+-- Active students with an active enrolment that began on or before the given date, with the date
+-- of their first ever enrolment (it decides when one-time fees fall due). Used by fees.
+SELECT s.id, s.registration_no, s.full_name, s.family_id, e.section_id,
+       (SELECT min(x.started_on) FROM enrolments x
+         WHERE x.tenant_id = s.tenant_id AND x.student_id = s.id)::date AS first_started_on
+FROM students s
+JOIN enrolments e ON e.tenant_id = s.tenant_id AND e.student_id = s.id AND e.status = 'active'
+WHERE s.tenant_id = sqlc.arg('tenant_id') AND s.status = 'active'
+  AND e.started_on <= sqlc.arg('on_or_before')::date
+ORDER BY s.registration_no, s.id;
