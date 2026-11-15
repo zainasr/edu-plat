@@ -24,6 +24,8 @@ const (
 	PermFeeView       = "fee.view"
 	PermFeePlanManage = "fee.plan.manage"
 	PermFeeSettings   = "fee.settings"
+	PermFeeGenerate   = "fee.generate"
+	PermFeeRelease    = "fee.release"
 )
 
 // rolePermissions maps each built-in role to its permissions. Roles are code in the skeleton;
@@ -33,7 +35,7 @@ var rolePermissions = map[string][]string{
 		PermStudentView, PermStudentCreate, PermStudentEdit, PermTokenManage,
 		PermOrgView, PermOrgManage, PermSessionManage,
 		PermLedgerView, PermReportFinanceView,
-		PermFeeView, PermFeePlanManage, PermFeeSettings,
+		PermFeeView, PermFeePlanManage, PermFeeSettings, PermFeeGenerate, PermFeeRelease,
 	},
 }
 

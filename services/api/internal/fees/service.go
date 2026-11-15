@@ -12,6 +12,7 @@ import (
 
 	"github.com/zainasr/edu-plat/services/api/internal/fees/store/gen"
 	"github.com/zainasr/edu-plat/services/api/internal/iam"
+	"github.com/zainasr/edu-plat/services/api/internal/ledger"
 	"github.com/zainasr/edu-plat/services/api/internal/org"
 	"github.com/zainasr/edu-plat/services/api/internal/platform/apperr"
 	"github.com/zainasr/edu-plat/services/api/internal/platform/audit"
@@ -70,18 +71,20 @@ type Structure struct {
 	Lines     []Line
 }
 
-// Service holds the fee setup rules. It asks org about classes and students about a student's class,
-// inside its own transaction, and never reads their tables (ADR-0013).
+// Service holds the fee rules. It asks org about classes and students about a student's class,
+// inside its own transaction, and never reads their tables (ADR-0013). Releasing a challan posts to
+// the ledger in the same transaction (ADR-0014, ADR-0017).
 type Service struct {
 	pool     *pgxpool.Pool
 	org      *org.Service
 	students *students.Service
+	ledger   *ledger.Service
 	now      func() time.Time
 }
 
 // NewService builds the fees service.
-func NewService(pool *pgxpool.Pool, structure *org.Service, enrolment *students.Service) *Service {
-	return &Service{pool: pool, org: structure, students: enrolment, now: time.Now}
+func NewService(pool *pgxpool.Pool, structure *org.Service, enrolment *students.Service, books *ledger.Service) *Service {
+	return &Service{pool: pool, org: structure, students: enrolment, ledger: books, now: time.Now}
 }
 
 // ---- fee types ------------------------------------------------------------------------
@@ -454,16 +457,9 @@ func (s *Service) FeeStructure(ctx context.Context, p iam.Principal, studentID s
 		if err != nil {
 			return err
 		}
-		overrideRows, err := q.ListOverridesForStudent(ctx, gen.ListOverridesForStudentParams{TenantID: tenant, StudentID: studentUUID})
+		overrides, err := loadOverrides(ctx, q, tenant, studentUUID)
 		if err != nil {
-			return fmt.Errorf("list overrides: %w", err)
-		}
-		overrides := make([]OverrideVersion, 0, len(overrideRows))
-		for _, r := range overrideRows {
-			overrides = append(overrides, OverrideVersion{
-				FeeTypeID: db.UUIDString(r.FeeTypeID), Amount: money.Money(r.Amount),
-				EffectiveFrom: r.EffectiveFrom.Time, Cleared: r.Cleared,
-			})
+			return err
 		}
 		out.Lines = resolveStructure(month, resolvePlan(month, versions, types), overrides)
 		return nil
@@ -472,6 +468,22 @@ func (s *Service) FeeStructure(ctx context.Context, p iam.Principal, studentID s
 }
 
 // ---- helpers --------------------------------------------------------------------------
+
+// loadOverrides reads every override version of a student for the resolver.
+func loadOverrides(ctx context.Context, q *gen.Queries, tenant, student pgtype.UUID) ([]OverrideVersion, error) {
+	rows, err := q.ListOverridesForStudent(ctx, gen.ListOverridesForStudentParams{TenantID: tenant, StudentID: student})
+	if err != nil {
+		return nil, fmt.Errorf("list overrides: %w", err)
+	}
+	out := make([]OverrideVersion, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, OverrideVersion{
+			FeeTypeID: db.UUIDString(r.FeeTypeID), Amount: money.Money(r.Amount),
+			EffectiveFrom: r.EffectiveFrom.Time, Cleared: r.Cleared,
+		})
+	}
+	return out, nil
+}
 
 // loadPlan reads all versions of a class plan and the school's fee types for the resolver.
 func (s *Service) loadPlan(ctx context.Context, q *gen.Queries, tenant, class pgtype.UUID) ([]PlanVersion, map[string]TypeInfo, error) {
