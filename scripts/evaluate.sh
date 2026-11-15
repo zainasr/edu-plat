@@ -82,7 +82,7 @@ gate_no_secrets() {
   while IFS= read -r f; do
     [ -f "$f" ] || continue
     scripts/secret-scan.sh < "$f" >/dev/null || hits="$hits$f"$'\n'
-  done < <(git ls-files)
+  done < <(git ls-files --cached --others --exclude-standard)  # tracked and new files, so nothing escapes by being uncommitted
   [ -z "$hits" ] || { echo "files that look like they contain a secret:"; printf '%s' "$hits"; return 1; }
 }
 

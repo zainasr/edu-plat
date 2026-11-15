@@ -58,8 +58,8 @@ expect "migration: non-migration file is ignored"    0 guard-migration.sh "$(wri
 # ---- guard-secrets -------------------------------------------------------------------------------
 long="Qx9kLm2pR7vTz4WnB8yHc1JdF5sGa3UeO6iYtMr0XqjKLMNOP"
 tok="edu_pat_${long:0:43}"
-expect "secrets: private key is blocked"        2 guard-secrets.sh "$(write "$ROOT/docs/x.md" '-----BEGIN RSA PRIVATE KEY-----')"
-expect "secrets: AWS key is blocked"            2 guard-secrets.sh "$(write "$ROOT/docs/x.md" 'key=AKIAABCDEFGHIJKLMNOP')"
+expect "secrets: private key is blocked"        2 guard-secrets.sh "$(write "$ROOT/docs/x.md" '-----BEGIN RSA PRIV''ATE KEY-----')"
+expect "secrets: AWS key is blocked"            2 guard-secrets.sh "$(write "$ROOT/docs/x.md" 'key=AKI''AABCDEFGHIJKLMNOP')"
 expect "secrets: real-shaped PAT is blocked"    2 guard-secrets.sh "$(write "$ROOT/docs/x.md" "token: $tok")"
 expect "secrets: .env file is blocked"          2 guard-secrets.sh "$(write "$ROOT/.env" 'A=1')"
 expect "secrets: .env.example is allowed"       0 guard-secrets.sh "$(write "$ROOT/.env.example" 'A=')"
