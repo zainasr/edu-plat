@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Education Platform API
-  version: 0.7.0
+  version: 0.8.1
   description: Source of truth for every capability (DEC-004). Edit this first, then the code.
 # Infrastructure endpoints (health) sit at the root for the load balancer.
 # Product endpoints carry their version in the path, for example /api/v1/students.
@@ -16,6 +16,7 @@ tags:
   - name: structure
   - name: ledger
   - name: fees
+  - name: staff
 
 security:
   - bearerAuth: []
@@ -900,6 +901,216 @@ paths:
         "409": { $ref: "#/components/responses/Conflict" }
         "500": { $ref: "#/components/responses/InternalError" }
 
+  /api/v1/roles:
+    get:
+      operationId: listRoles
+      tags: [staff]
+      summary: The built-in roles and the permissions each one grants
+      description: Requires `user.view`.
+      responses:
+        "200":
+          description: The roles
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RoleList" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/staff:
+    post:
+      operationId: createStaff
+      tags: [staff]
+      summary: Add a staff member to the school
+      description: |
+        Requires `user.manage` and, because it gives roles, `role.manage`; giving the `owner` role also needs the caller to be an owner. The person is
+        identified by mobile number. If that number already belongs to someone (even in another school) the
+        same person is added here, and nothing in the response says so. The name given is this school's
+        name for them. Starting roles are required.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StaffCreate" }
+      responses:
+        "201":
+          description: The staff member
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StaffMember" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/KeyReused" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    get:
+      operationId: listStaff
+      tags: [staff]
+      summary: List the school's staff
+      description: Requires `user.view`. Ordered by name.
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema: { $ref: "#/components/schemas/StaffStatus" }
+      responses:
+        "200":
+          description: The staff
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StaffList" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/staff/{staffId}:
+    get:
+      operationId: getStaff
+      tags: [staff]
+      summary: One staff member with their current roles
+      description: Requires `user.view`.
+      parameters:
+        - name: staffId
+          in: path
+          required: true
+          description: The id of the staff member (their membership in this school).
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: The staff member
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StaffMember" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/staff/{staffId}/roles:
+    post:
+      operationId: assignRole
+      tags: [staff]
+      summary: Give a staff member a role
+      description: |
+        Requires `role.manage`; the `owner` role can be given only by an owner. A person may hold many
+        roles and their permissions are the union (REQ-IAM-002). Giving a role they already hold is a 409.
+      parameters:
+        - name: staffId
+          in: path
+          required: true
+          description: The id of the staff member (their membership in this school).
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RoleAssign" }
+      responses:
+        "200":
+          description: The staff member with the new role
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StaffMember" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/KeyReused" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/staff/{staffId}/roles/{role}/revoke:
+    post:
+      operationId: revokeRole
+      tags: [staff]
+      summary: Take a role away from a staff member
+      description: |
+        Requires `role.manage`; the `owner` role can be revoked only by an owner, and never from the last
+        owner (`staff.last_owner`). The assignment is kept as history (REQ-IAM-006). Taking a person's last role
+        switches them off, as deactivation does (REQ-IAM-006); it cannot be your own last role.
+      parameters:
+        - name: staffId
+          in: path
+          required: true
+          description: The id of the staff member (their membership in this school).
+          schema: { type: string, format: uuid }
+        - name: role
+          in: path
+          required: true
+          schema: { $ref: "#/components/schemas/RoleName" }
+      responses:
+        "200":
+          description: The staff member without that role
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StaffMember" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/staff/{staffId}/deactivate:
+    post:
+      operationId: deactivateStaff
+      tags: [staff]
+      summary: Switch a staff member off
+      description: |
+        Requires `user.manage` (an owner is switched off only by an owner). Access ends on their next request and their tokens are revoked; their
+        history stays (US-IAM-005). You cannot deactivate yourself, nor the last owner.
+      parameters:
+        - name: staffId
+          in: path
+          required: true
+          description: The id of the staff member (their membership in this school).
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: The deactivated staff member
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StaffMember" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/staff/{staffId}/reactivate:
+    post:
+      operationId: reactivateStaff
+      tags: [staff]
+      summary: Switch a deactivated staff member back on
+      description: |
+        Requires `user.manage`. Their roles are as they were; they sign in again, since their old tokens
+        stay revoked.
+      parameters:
+        - name: staffId
+          in: path
+          required: true
+          description: The id of the staff member (their membership in this school).
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: The staff member
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StaffMember" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
 components:
   parameters:
     IdempotencyKey:
@@ -1667,3 +1878,67 @@ components:
           type: array
           items: { $ref: "#/components/schemas/Challan" }
         next_cursor: { type: string, nullable: true }
+
+    RoleName:
+      type: string
+      enum: [owner, accountant, receptionist]
+
+    StaffStatus:
+      type: string
+      enum: [active, deactivated]
+
+    RoleInfo:
+      type: object
+      required: [name, permissions]
+      properties:
+        name: { $ref: "#/components/schemas/RoleName" }
+        permissions:
+          type: array
+          items: { type: string }
+
+    RoleList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/RoleInfo" }
+
+    StaffCreate:
+      type: object
+      required: [mobile, full_name, roles]
+      properties:
+        mobile: { type: string, example: "03001234567" }
+        full_name: { type: string, minLength: 1, maxLength: 80 }
+        roles:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/RoleName" }
+
+    RoleAssign:
+      type: object
+      required: [role]
+      properties:
+        role: { $ref: "#/components/schemas/RoleName" }
+
+    StaffMember:
+      type: object
+      required: [id, mobile, full_name, status, roles, created_at]
+      properties:
+        id: { type: string, format: uuid, description: The staff member's id in this school. }
+        mobile: { type: string, description: In +92 form. }
+        full_name: { type: string }
+        status: { $ref: "#/components/schemas/StaffStatus" }
+        roles:
+          type: array
+          description: Current roles only; revoked ones are in the audit log.
+          items: { $ref: "#/components/schemas/RoleName" }
+        created_at: { type: string, format: date-time }
+
+    StaffList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/StaffMember" }

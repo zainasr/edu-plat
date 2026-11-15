@@ -29,6 +29,32 @@ func (q *Queries) ActiveMembership(ctx context.Context, arg ActiveMembershipPara
 	return id, err
 }
 
+const assignRole = `-- name: AssignRole :one
+INSERT INTO role_assignments (tenant_id, membership_id, role, created_by)
+VALUES ($1, $2, $3, $4)
+RETURNING id
+`
+
+type AssignRoleParams struct {
+	TenantID     pgtype.UUID
+	MembershipID pgtype.UUID
+	Role         string
+	CreatedBy    pgtype.UUID
+}
+
+// Fails with a unique violation when the person already holds the role (live assignments only).
+func (q *Queries) AssignRole(ctx context.Context, arg AssignRoleParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, assignRole,
+		arg.TenantID,
+		arg.MembershipID,
+		arg.Role,
+		arg.CreatedBy,
+	)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const consumeOTPChallenge = `-- name: ConsumeOTPChallenge :execrows
 UPDATE otp_challenges
 SET consumed_at = now()
@@ -42,6 +68,59 @@ func (q *Queries) ConsumeOTPChallenge(ctx context.Context, id pgtype.UUID) (int6
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const countActiveOwners = `-- name: CountActiveOwners :one
+SELECT count(*)::bigint
+FROM role_assignments ra
+JOIN memberships m ON m.tenant_id = ra.tenant_id AND m.id = ra.membership_id
+WHERE ra.tenant_id = $1 AND ra.role = 'owner' AND ra.revoked_at IS NULL AND m.status = 'active'
+`
+
+func (q *Queries) CountActiveOwners(ctx context.Context, tenantID pgtype.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countActiveOwners, tenantID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const deactivateMembership = `-- name: DeactivateMembership :one
+UPDATE memberships
+SET status = 'deactivated', deactivated_at = now(), deactivated_by = $1
+WHERE tenant_id = $2 AND id = $3 AND status = 'active'
+RETURNING id
+`
+
+type DeactivateMembershipParams struct {
+	DeactivatedBy pgtype.UUID
+	TenantID      pgtype.UUID
+	ID            pgtype.UUID
+}
+
+func (q *Queries) DeactivateMembership(ctx context.Context, arg DeactivateMembershipParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, deactivateMembership, arg.DeactivatedBy, arg.TenantID, arg.ID)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
+const ensureUser = `-- name: EnsureUser :one
+
+SELECT ensure_user($1, $2)::uuid AS id
+`
+
+type EnsureUserParams struct {
+	Mobile   string
+	FullName string
+}
+
+// ---- staff management (slice 4b) ------------------------------------------------------
+// The narrow definer function: adds the person if the mobile is new, else returns the existing id.
+func (q *Queries) EnsureUser(ctx context.Context, arg EnsureUserParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, ensureUser, arg.Mobile, arg.FullName)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
 }
 
 const findUserByMobile = `-- name: FindUserByMobile :one
@@ -60,6 +139,42 @@ func (q *Queries) FindUserByMobile(ctx context.Context, mobile string) (FindUser
 	row := q.db.QueryRow(ctx, findUserByMobile, mobile)
 	var i FindUserByMobileRow
 	err := row.Scan(&i.ID, &i.Mobile, &i.FullName)
+	return i, err
+}
+
+const getStaff = `-- name: GetStaff :one
+SELECT m.id, m.user_id, u.mobile, COALESCE(m.display_name, u.full_name)::text AS full_name,
+       m.status, m.created_at
+FROM memberships m
+JOIN users u ON u.id = m.user_id
+WHERE m.tenant_id = $1 AND m.id = $2
+`
+
+type GetStaffParams struct {
+	TenantID pgtype.UUID
+	ID       pgtype.UUID
+}
+
+type GetStaffRow struct {
+	ID        pgtype.UUID
+	UserID    pgtype.UUID
+	Mobile    string
+	FullName  string
+	Status    string
+	CreatedAt pgtype.Timestamptz
+}
+
+func (q *Queries) GetStaff(ctx context.Context, arg GetStaffParams) (GetStaffRow, error) {
+	row := q.db.QueryRow(ctx, getStaff, arg.TenantID, arg.ID)
+	var i GetStaffRow
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Mobile,
+		&i.FullName,
+		&i.Status,
+		&i.CreatedAt,
+	)
 	return i, err
 }
 
@@ -164,6 +279,32 @@ func (q *Queries) InsertRoleAssignment(ctx context.Context, arg InsertRoleAssign
 	return err
 }
 
+const insertStaffMembership = `-- name: InsertStaffMembership :one
+INSERT INTO memberships (tenant_id, user_id, display_name, created_by)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (tenant_id, user_id) DO NOTHING
+RETURNING id
+`
+
+type InsertStaffMembershipParams struct {
+	TenantID    pgtype.UUID
+	UserID      pgtype.UUID
+	DisplayName pgtype.Text
+	CreatedBy   pgtype.UUID
+}
+
+func (q *Queries) InsertStaffMembership(ctx context.Context, arg InsertStaffMembershipParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, insertStaffMembership,
+		arg.TenantID,
+		arg.UserID,
+		arg.DisplayName,
+		arg.CreatedBy,
+	)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const insertTenant = `-- name: InsertTenant :one
 INSERT INTO tenants (slug, name)
 VALUES ($1, $2)
@@ -229,10 +370,174 @@ func (q *Queries) LatestOTPChallenge(ctx context.Context, mobile string) (Latest
 	return i, err
 }
 
+const listStaff = `-- name: ListStaff :many
+SELECT m.id, m.user_id, u.mobile, COALESCE(m.display_name, u.full_name)::text AS full_name,
+       m.status, m.created_at
+FROM memberships m
+JOIN users u ON u.id = m.user_id
+WHERE m.tenant_id = $1
+  AND ($2::text IS NULL OR m.status = $2::text)
+ORDER BY COALESCE(m.display_name, u.full_name), m.id
+`
+
+type ListStaffParams struct {
+	TenantID pgtype.UUID
+	Status   pgtype.Text
+}
+
+type ListStaffRow struct {
+	ID        pgtype.UUID
+	UserID    pgtype.UUID
+	Mobile    string
+	FullName  string
+	Status    string
+	CreatedAt pgtype.Timestamptz
+}
+
+func (q *Queries) ListStaff(ctx context.Context, arg ListStaffParams) ([]ListStaffRow, error) {
+	rows, err := q.db.Query(ctx, listStaff, arg.TenantID, arg.Status)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListStaffRow
+	for rows.Next() {
+		var i ListStaffRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Mobile,
+			&i.FullName,
+			&i.Status,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const liveRolesForMemberships = `-- name: LiveRolesForMemberships :many
+SELECT membership_id, role
+FROM role_assignments
+WHERE tenant_id = $1 AND membership_id = ANY($2::uuid[]) AND revoked_at IS NULL
+ORDER BY membership_id, role
+`
+
+type LiveRolesForMembershipsParams struct {
+	TenantID      pgtype.UUID
+	MembershipIds []pgtype.UUID
+}
+
+type LiveRolesForMembershipsRow struct {
+	MembershipID pgtype.UUID
+	Role         string
+}
+
+func (q *Queries) LiveRolesForMemberships(ctx context.Context, arg LiveRolesForMembershipsParams) ([]LiveRolesForMembershipsRow, error) {
+	rows, err := q.db.Query(ctx, liveRolesForMemberships, arg.TenantID, arg.MembershipIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []LiveRolesForMembershipsRow
+	for rows.Next() {
+		var i LiveRolesForMembershipsRow
+		if err := rows.Scan(&i.MembershipID, &i.Role); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const lockOwnerChanges = `-- name: LockOwnerChanges :exec
+SELECT pg_advisory_xact_lock(hashtextextended('owners:' || $1::text, 0))
+`
+
+// One lock per school for anything that can remove an owner, so two requests cannot each see "there is
+// another owner" and both remove one. Released at commit.
+func (q *Queries) LockOwnerChanges(ctx context.Context, tenantID string) error {
+	_, err := q.db.Exec(ctx, lockOwnerChanges, tenantID)
+	return err
+}
+
+const reactivateMembership = `-- name: ReactivateMembership :one
+UPDATE memberships
+SET status = 'active', deactivated_at = NULL, deactivated_by = NULL
+WHERE tenant_id = $1 AND id = $2 AND status = 'deactivated'
+RETURNING id
+`
+
+type ReactivateMembershipParams struct {
+	TenantID pgtype.UUID
+	ID       pgtype.UUID
+}
+
+func (q *Queries) ReactivateMembership(ctx context.Context, arg ReactivateMembershipParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, reactivateMembership, arg.TenantID, arg.ID)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
+const revokeMembershipTokens = `-- name: RevokeMembershipTokens :execrows
+UPDATE api_tokens
+SET revoked_at = now()
+WHERE tenant_id = $1 AND membership_id = $2 AND revoked_at IS NULL
+`
+
+type RevokeMembershipTokensParams struct {
+	TenantID     pgtype.UUID
+	MembershipID pgtype.UUID
+}
+
+func (q *Queries) RevokeMembershipTokens(ctx context.Context, arg RevokeMembershipTokensParams) (int64, error) {
+	result, err := q.db.Exec(ctx, revokeMembershipTokens, arg.TenantID, arg.MembershipID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const revokeRole = `-- name: RevokeRole :one
+UPDATE role_assignments
+SET revoked_at = now(), revoked_by = $1
+WHERE tenant_id = $2 AND membership_id = $3
+  AND role = $4 AND revoked_at IS NULL
+RETURNING id
+`
+
+type RevokeRoleParams struct {
+	RevokedBy    pgtype.UUID
+	TenantID     pgtype.UUID
+	MembershipID pgtype.UUID
+	Role         string
+}
+
+func (q *Queries) RevokeRole(ctx context.Context, arg RevokeRoleParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, revokeRole,
+		arg.RevokedBy,
+		arg.TenantID,
+		arg.MembershipID,
+		arg.Role,
+	)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const roleNamesForMembership = `-- name: RoleNamesForMembership :many
 SELECT role
 FROM role_assignments
-WHERE tenant_id = $1 AND membership_id = $2
+WHERE tenant_id = $1 AND membership_id = $2 AND revoked_at IS NULL
 ORDER BY role
 `
 

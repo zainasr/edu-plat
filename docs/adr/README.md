@@ -22,5 +22,6 @@ An ADR records one significant technical choice: the context, the options, the d
 | 0016 | Web staff portal stack (Tailwind + shadcn/ui, openapi-typescript client, httpOnly cookie via Next.js server) | Accepted |
 | 0017 | Challans: drafts post nothing, release posts the receivable | Accepted |
 | 0018 | Idempotency keys as middleware with a per-school key table | Accepted |
+| 0019 | Staff and roles management | Accepted |
 
 Still to write when reached: token format and sessions, PDF renderer, observability stack, Terraform layout.

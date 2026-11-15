@@ -4,6 +4,7 @@ package iam
 
 import (
 	"context"
+	"slices"
 
 	"github.com/zainasr/edu-plat/services/api/internal/platform/apperr"
 )
@@ -26,6 +27,10 @@ const (
 	PermFeeSettings   = "fee.settings"
 	PermFeeGenerate   = "fee.generate"
 	PermFeeRelease    = "fee.release"
+
+	PermUserView   = "user.view"
+	PermUserManage = "user.manage"
+	PermRoleManage = "role.manage"
 )
 
 // rolePermissions maps each built-in role to its permissions. Roles are code in the skeleton;
@@ -36,6 +41,7 @@ var rolePermissions = map[string][]string{
 		PermOrgView, PermOrgManage, PermSessionManage,
 		PermLedgerView, PermReportFinanceView,
 		PermFeeView, PermFeePlanManage, PermFeeSettings, PermFeeGenerate, PermFeeRelease,
+		PermUserView, PermUserManage, PermRoleManage,
 	},
 	// Accountant: fee.* except settings, and the accounting reads (spec 02-identity §3). Payments,
 	// payroll and the rest are added with the slices that build them.
@@ -56,8 +62,12 @@ type Principal struct {
 	MembershipID string
 	TokenID      string
 	TokenKind    string // "session" or "pat"
+	roles        []string
 	permissions  map[string]struct{}
 }
+
+// HasRole reports whether the principal holds the named role (a live assignment).
+func (p Principal) HasRole(role string) bool { return slices.Contains(p.roles, role) }
 
 // Can reports whether the principal holds the named permission.
 func (p Principal) Can(permission string) bool {

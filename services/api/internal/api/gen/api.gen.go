@@ -327,6 +327,27 @@ func (e Relationship) Valid() bool {
 	}
 }
 
+// Defines values for RoleName.
+const (
+	Accountant   RoleName = "accountant"
+	Owner        RoleName = "owner"
+	Receptionist RoleName = "receptionist"
+)
+
+// Valid indicates whether the value is a known member of the RoleName enum.
+func (e RoleName) Valid() bool {
+	switch e {
+	case Accountant:
+		return true
+	case Owner:
+		return true
+	case Receptionist:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SectionStatus.
 const (
 	SectionStatusActive   SectionStatus = "active"
@@ -357,6 +378,24 @@ func (e Shift) Valid() bool {
 	case Evening:
 		return true
 	case Morning:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for StaffStatus.
+const (
+	StaffStatusActive      StaffStatus = "active"
+	StaffStatusDeactivated StaffStatus = "deactivated"
+)
+
+// Valid indicates whether the value is a known member of the StaffStatus enum.
+func (e StaffStatus) Valid() bool {
+	switch e {
+	case StaffStatusActive:
+		return true
+	case StaffStatusDeactivated:
 		return true
 	default:
 		return false
@@ -885,6 +924,25 @@ type ReleaseChallans struct {
 	ChallanIds []openapi_types.UUID `json:"challan_ids"`
 }
 
+// RoleAssign defines model for RoleAssign.
+type RoleAssign struct {
+	Role RoleName `json:"role"`
+}
+
+// RoleInfo defines model for RoleInfo.
+type RoleInfo struct {
+	Name        RoleName `json:"name"`
+	Permissions []string `json:"permissions"`
+}
+
+// RoleList defines model for RoleList.
+type RoleList struct {
+	Items []RoleInfo `json:"items"`
+}
+
+// RoleName defines model for RoleName.
+type RoleName string
+
 // Section defines model for Section.
 type Section struct {
 	ClassId   openapi_types.UUID `json:"class_id"`
@@ -927,6 +985,39 @@ type Session struct {
 
 // Shift A shift is a property of a section (REQ-ORG-005).
 type Shift string
+
+// StaffCreate defines model for StaffCreate.
+type StaffCreate struct {
+	FullName string `json:"full_name"`
+
+	// Mobile Example: 03001234567
+	Mobile string     `json:"mobile"`
+	Roles  []RoleName `json:"roles"`
+}
+
+// StaffList defines model for StaffList.
+type StaffList struct {
+	Items []StaffMember `json:"items"`
+}
+
+// StaffMember defines model for StaffMember.
+type StaffMember struct {
+	CreatedAt time.Time `json:"created_at"`
+	FullName  string    `json:"full_name"`
+
+	// Id The staff member's id in this school.
+	Id openapi_types.UUID `json:"id"`
+
+	// Mobile In +92 form.
+	Mobile string `json:"mobile"`
+
+	// Roles Current roles only; revoked ones are in the audit log.
+	Roles  []RoleName  `json:"roles"`
+	Status StaffStatus `json:"status"`
+}
+
+// StaffStatus defines model for StaffStatus.
+type StaffStatus string
 
 // Student defines model for Student.
 type Student struct {
@@ -1143,6 +1234,37 @@ type ListSectionsParams struct {
 	ClassId *openapi_types.UUID `form:"class_id,omitempty" json:"class_id,omitempty"`
 }
 
+// ListStaffParams defines parameters for ListStaff.
+type ListStaffParams struct {
+	Status *StaffStatus `form:"status,omitempty" json:"status,omitempty"`
+}
+
+// CreateStaffParams defines parameters for CreateStaff.
+type CreateStaffParams struct {
+	// IdempotencyKey A client-chosen unique string (8 to 128 characters: letters, digits, `.`, `_`, `:`, `-`) that makes
+	// a retry safe (REQ-API-010). The key belongs to the user who first sent it, for one endpoint and one
+	// exact request (path, query and body). A repeat of that request returns the original successful
+	// response (header `Idempotent-Replay: true`; only the status, body and Content-Type are replayed)
+	// and does nothing again. The same key with anything different, including another user, is refused
+	// with 422 `idempotency.key_reused`. While the first request is still running a repeat gets 409
+	// `idempotency.in_progress`. Only successful responses (below 400) are remembered, for 24 hours; an
+	// error frees the key so the same request can be retried. Optional for now; payments will require it.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// AssignRoleParams defines parameters for AssignRole.
+type AssignRoleParams struct {
+	// IdempotencyKey A client-chosen unique string (8 to 128 characters: letters, digits, `.`, `_`, `:`, `-`) that makes
+	// a retry safe (REQ-API-010). The key belongs to the user who first sent it, for one endpoint and one
+	// exact request (path, query and body). A repeat of that request returns the original successful
+	// response (header `Idempotent-Replay: true`; only the status, body and Content-Type are replayed)
+	// and does nothing again. The same key with anything different, including another user, is refused
+	// with 422 `idempotency.key_reused`. While the first request is still running a repeat gets 409
+	// `idempotency.in_progress`. Only successful responses (below 400) are remembered, for 24 hours; an
+	// error frees the key so the same request can be retried. Optional for now; payments will require it.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // ListStudentsParams defines parameters for ListStudents.
 type ListStudentsParams struct {
 	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
@@ -1197,6 +1319,12 @@ type CreateSectionJSONRequestBody = SectionCreate
 
 // CreateSessionJSONRequestBody defines body for CreateSession for application/json ContentType.
 type CreateSessionJSONRequestBody = AcademicSessionCreate
+
+// CreateStaffJSONRequestBody defines body for CreateStaff for application/json ContentType.
+type CreateStaffJSONRequestBody = StaffCreate
+
+// AssignRoleJSONRequestBody defines body for AssignRole for application/json ContentType.
+type AssignRoleJSONRequestBody = RoleAssign
 
 // CreateStudentJSONRequestBody defines body for CreateStudent for application/json ContentType.
 type CreateStudentJSONRequestBody = StudentCreate
@@ -1272,6 +1400,9 @@ type ServerInterface interface {
 	// GetTrialBalance Debit and credit totals per account up to a date
 	// (GET /api/v1/reports/trial-balance)
 	GetTrialBalance(w http.ResponseWriter, r *http.Request, params GetTrialBalanceParams)
+	// ListRoles The built-in roles and the permissions each one grants
+	// (GET /api/v1/roles)
+	ListRoles(w http.ResponseWriter, r *http.Request)
 	// ListSections List sections, optionally of one class
 	// (GET /api/v1/sections)
 	ListSections(w http.ResponseWriter, r *http.Request, params ListSectionsParams)
@@ -1290,6 +1421,27 @@ type ServerInterface interface {
 	// MakeSessionCurrent Make this session the current one
 	// (POST /api/v1/sessions/{sessionId}/make-current)
 	MakeSessionCurrent(w http.ResponseWriter, r *http.Request, sessionId openapi_types.UUID)
+	// ListStaff List the school's staff
+	// (GET /api/v1/staff)
+	ListStaff(w http.ResponseWriter, r *http.Request, params ListStaffParams)
+	// CreateStaff Add a staff member to the school
+	// (POST /api/v1/staff)
+	CreateStaff(w http.ResponseWriter, r *http.Request, params CreateStaffParams)
+	// GetStaff One staff member with their current roles
+	// (GET /api/v1/staff/{staffId})
+	GetStaff(w http.ResponseWriter, r *http.Request, staffId openapi_types.UUID)
+	// DeactivateStaff Switch a staff member off
+	// (POST /api/v1/staff/{staffId}/deactivate)
+	DeactivateStaff(w http.ResponseWriter, r *http.Request, staffId openapi_types.UUID)
+	// ReactivateStaff Switch a deactivated staff member back on
+	// (POST /api/v1/staff/{staffId}/reactivate)
+	ReactivateStaff(w http.ResponseWriter, r *http.Request, staffId openapi_types.UUID)
+	// AssignRole Give a staff member a role
+	// (POST /api/v1/staff/{staffId}/roles)
+	AssignRole(w http.ResponseWriter, r *http.Request, staffId openapi_types.UUID, params AssignRoleParams)
+	// RevokeRole Take a role away from a staff member
+	// (POST /api/v1/staff/{staffId}/roles/{role}/revoke)
+	RevokeRole(w http.ResponseWriter, r *http.Request, staffId openapi_types.UUID, role RoleName)
 	// ListStudents List students in the caller's tenant (cursor paginated)
 	// (GET /api/v1/students)
 	ListStudents(w http.ResponseWriter, r *http.Request, params ListStudentsParams)
@@ -1923,6 +2075,20 @@ func (siw *ServerInterfaceWrapper) GetTrialBalance(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// ListRoles operation middleware
+func (siw *ServerInterfaceWrapper) ListRoles(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRoles(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListSections operation middleware
 func (siw *ServerInterfaceWrapper) ListSections(w http.ResponseWriter, r *http.Request) {
 
@@ -2041,6 +2207,243 @@ func (siw *ServerInterfaceWrapper) MakeSessionCurrent(w http.ResponseWriter, r *
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.MakeSessionCurrent(w, r, sessionId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListStaff operation middleware
+func (siw *ServerInterfaceWrapper) ListStaff(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListStaffParams
+
+	// ------------- Optional query parameter "status" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "status", r.URL.Query(), &params.Status, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "status"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "status", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListStaff(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateStaff operation middleware
+func (siw *ServerInterfaceWrapper) CreateStaff(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateStaffParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateStaff(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetStaff operation middleware
+func (siw *ServerInterfaceWrapper) GetStaff(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "staffId" -------------
+	var staffId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "staffId", r.PathValue("staffId"), &staffId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "staffId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetStaff(w, r, staffId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeactivateStaff operation middleware
+func (siw *ServerInterfaceWrapper) DeactivateStaff(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "staffId" -------------
+	var staffId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "staffId", r.PathValue("staffId"), &staffId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "staffId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeactivateStaff(w, r, staffId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReactivateStaff operation middleware
+func (siw *ServerInterfaceWrapper) ReactivateStaff(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "staffId" -------------
+	var staffId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "staffId", r.PathValue("staffId"), &staffId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "staffId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReactivateStaff(w, r, staffId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AssignRole operation middleware
+func (siw *ServerInterfaceWrapper) AssignRole(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "staffId" -------------
+	var staffId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "staffId", r.PathValue("staffId"), &staffId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "staffId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params AssignRoleParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AssignRole(w, r, staffId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevokeRole operation middleware
+func (siw *ServerInterfaceWrapper) RevokeRole(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "staffId" -------------
+	var staffId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "staffId", r.PathValue("staffId"), &staffId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "staffId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "role" -------------
+	var role RoleName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "role", r.PathValue("role"), &role, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "role", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokeRole(w, r, staffId, role)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2493,6 +2896,14 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/challans", wrapper.ListChallans)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/challans/{challanId}", wrapper.GetChallan)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/challans/{challanId}/void", wrapper.VoidChallan)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/roles", wrapper.ListRoles)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/staff", wrapper.ListStaff)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/staff", wrapper.CreateStaff)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/staff/{staffId}", wrapper.GetStaff)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/staff/{staffId}/roles", wrapper.AssignRole)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/staff/{staffId}/roles/{role}/revoke", wrapper.RevokeRole)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/staff/{staffId}/deactivate", wrapper.DeactivateStaff)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/staff/{staffId}/reactivate", wrapper.ReactivateStaff)
 
 	return m
 }
@@ -4162,6 +4573,69 @@ func (response GetTrialBalance500JSONResponse) VisitGetTrialBalanceResponse(w ht
 	return err
 }
 
+type ListRolesRequestObject struct {
+}
+
+type ListRolesResponseObject interface {
+	VisitListRolesResponse(w http.ResponseWriter) error
+}
+
+type ListRoles200JSONResponse RoleList
+
+func (response ListRoles200JSONResponse) VisitListRolesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRoles401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ListRoles401JSONResponse) VisitListRolesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRoles403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListRoles403JSONResponse) VisitListRolesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRoles500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListRoles500JSONResponse) VisitListRolesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListSectionsRequestObject struct {
 	Params ListSectionsParams
 }
@@ -4632,6 +5106,724 @@ func (response MakeSessionCurrent404JSONResponse) VisitMakeSessionCurrentRespons
 type MakeSessionCurrent500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response MakeSessionCurrent500JSONResponse) VisitMakeSessionCurrentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListStaffRequestObject struct {
+	Params ListStaffParams
+}
+
+type ListStaffResponseObject interface {
+	VisitListStaffResponse(w http.ResponseWriter) error
+}
+
+type ListStaff200JSONResponse StaffList
+
+func (response ListStaff200JSONResponse) VisitListStaffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListStaff400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response ListStaff400JSONResponse) VisitListStaffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListStaff401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ListStaff401JSONResponse) VisitListStaffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListStaff403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListStaff403JSONResponse) VisitListStaffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListStaff500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListStaff500JSONResponse) VisitListStaffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateStaffRequestObject struct {
+	Params CreateStaffParams
+	Body   *CreateStaffJSONRequestBody
+}
+
+type CreateStaffResponseObject interface {
+	VisitCreateStaffResponse(w http.ResponseWriter) error
+}
+
+type CreateStaff201JSONResponse StaffMember
+
+func (response CreateStaff201JSONResponse) VisitCreateStaffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateStaff400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response CreateStaff400JSONResponse) VisitCreateStaffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateStaff401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response CreateStaff401JSONResponse) VisitCreateStaffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateStaff403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateStaff403JSONResponse) VisitCreateStaffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateStaff409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateStaff409JSONResponse) VisitCreateStaffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateStaff422JSONResponse struct{ KeyReusedJSONResponse }
+
+func (response CreateStaff422JSONResponse) VisitCreateStaffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateStaff500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response CreateStaff500JSONResponse) VisitCreateStaffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetStaffRequestObject struct {
+	StaffId openapi_types.UUID `json:"staffId"`
+}
+
+type GetStaffResponseObject interface {
+	VisitGetStaffResponse(w http.ResponseWriter) error
+}
+
+type GetStaff200JSONResponse StaffMember
+
+func (response GetStaff200JSONResponse) VisitGetStaffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetStaff400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response GetStaff400JSONResponse) VisitGetStaffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetStaff401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response GetStaff401JSONResponse) VisitGetStaffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetStaff403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetStaff403JSONResponse) VisitGetStaffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetStaff404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetStaff404JSONResponse) VisitGetStaffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetStaff500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GetStaff500JSONResponse) VisitGetStaffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeactivateStaffRequestObject struct {
+	StaffId openapi_types.UUID `json:"staffId"`
+}
+
+type DeactivateStaffResponseObject interface {
+	VisitDeactivateStaffResponse(w http.ResponseWriter) error
+}
+
+type DeactivateStaff200JSONResponse StaffMember
+
+func (response DeactivateStaff200JSONResponse) VisitDeactivateStaffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeactivateStaff400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response DeactivateStaff400JSONResponse) VisitDeactivateStaffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeactivateStaff401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response DeactivateStaff401JSONResponse) VisitDeactivateStaffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeactivateStaff403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeactivateStaff403JSONResponse) VisitDeactivateStaffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeactivateStaff404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeactivateStaff404JSONResponse) VisitDeactivateStaffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeactivateStaff409JSONResponse struct{ ConflictJSONResponse }
+
+func (response DeactivateStaff409JSONResponse) VisitDeactivateStaffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeactivateStaff500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response DeactivateStaff500JSONResponse) VisitDeactivateStaffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReactivateStaffRequestObject struct {
+	StaffId openapi_types.UUID `json:"staffId"`
+}
+
+type ReactivateStaffResponseObject interface {
+	VisitReactivateStaffResponse(w http.ResponseWriter) error
+}
+
+type ReactivateStaff200JSONResponse StaffMember
+
+func (response ReactivateStaff200JSONResponse) VisitReactivateStaffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReactivateStaff400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response ReactivateStaff400JSONResponse) VisitReactivateStaffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReactivateStaff401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ReactivateStaff401JSONResponse) VisitReactivateStaffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReactivateStaff403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ReactivateStaff403JSONResponse) VisitReactivateStaffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReactivateStaff404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ReactivateStaff404JSONResponse) VisitReactivateStaffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReactivateStaff409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ReactivateStaff409JSONResponse) VisitReactivateStaffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReactivateStaff500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ReactivateStaff500JSONResponse) VisitReactivateStaffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AssignRoleRequestObject struct {
+	StaffId openapi_types.UUID `json:"staffId"`
+	Params  AssignRoleParams
+	Body    *AssignRoleJSONRequestBody
+}
+
+type AssignRoleResponseObject interface {
+	VisitAssignRoleResponse(w http.ResponseWriter) error
+}
+
+type AssignRole200JSONResponse StaffMember
+
+func (response AssignRole200JSONResponse) VisitAssignRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AssignRole400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response AssignRole400JSONResponse) VisitAssignRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AssignRole401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response AssignRole401JSONResponse) VisitAssignRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AssignRole403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response AssignRole403JSONResponse) VisitAssignRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AssignRole404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response AssignRole404JSONResponse) VisitAssignRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AssignRole409JSONResponse struct{ ConflictJSONResponse }
+
+func (response AssignRole409JSONResponse) VisitAssignRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AssignRole422JSONResponse struct{ KeyReusedJSONResponse }
+
+func (response AssignRole422JSONResponse) VisitAssignRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AssignRole500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response AssignRole500JSONResponse) VisitAssignRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeRoleRequestObject struct {
+	StaffId openapi_types.UUID `json:"staffId"`
+	Role    RoleName           `json:"role"`
+}
+
+type RevokeRoleResponseObject interface {
+	VisitRevokeRoleResponse(w http.ResponseWriter) error
+}
+
+type RevokeRole200JSONResponse StaffMember
+
+func (response RevokeRole200JSONResponse) VisitRevokeRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeRole400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response RevokeRole400JSONResponse) VisitRevokeRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeRole401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response RevokeRole401JSONResponse) VisitRevokeRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeRole403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response RevokeRole403JSONResponse) VisitRevokeRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeRole404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response RevokeRole404JSONResponse) VisitRevokeRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeRole409JSONResponse struct{ ConflictJSONResponse }
+
+func (response RevokeRole409JSONResponse) VisitRevokeRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeRole500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response RevokeRole500JSONResponse) VisitRevokeRoleResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -5505,6 +6697,9 @@ type StrictServerInterface interface {
 	// GetTrialBalance Debit and credit totals per account up to a date
 	// (GET /api/v1/reports/trial-balance)
 	GetTrialBalance(ctx context.Context, request GetTrialBalanceRequestObject) (GetTrialBalanceResponseObject, error)
+	// ListRoles The built-in roles and the permissions each one grants
+	// (GET /api/v1/roles)
+	ListRoles(ctx context.Context, request ListRolesRequestObject) (ListRolesResponseObject, error)
 	// ListSections List sections, optionally of one class
 	// (GET /api/v1/sections)
 	ListSections(ctx context.Context, request ListSectionsRequestObject) (ListSectionsResponseObject, error)
@@ -5523,6 +6718,27 @@ type StrictServerInterface interface {
 	// MakeSessionCurrent Make this session the current one
 	// (POST /api/v1/sessions/{sessionId}/make-current)
 	MakeSessionCurrent(ctx context.Context, request MakeSessionCurrentRequestObject) (MakeSessionCurrentResponseObject, error)
+	// ListStaff List the school's staff
+	// (GET /api/v1/staff)
+	ListStaff(ctx context.Context, request ListStaffRequestObject) (ListStaffResponseObject, error)
+	// CreateStaff Add a staff member to the school
+	// (POST /api/v1/staff)
+	CreateStaff(ctx context.Context, request CreateStaffRequestObject) (CreateStaffResponseObject, error)
+	// GetStaff One staff member with their current roles
+	// (GET /api/v1/staff/{staffId})
+	GetStaff(ctx context.Context, request GetStaffRequestObject) (GetStaffResponseObject, error)
+	// DeactivateStaff Switch a staff member off
+	// (POST /api/v1/staff/{staffId}/deactivate)
+	DeactivateStaff(ctx context.Context, request DeactivateStaffRequestObject) (DeactivateStaffResponseObject, error)
+	// ReactivateStaff Switch a deactivated staff member back on
+	// (POST /api/v1/staff/{staffId}/reactivate)
+	ReactivateStaff(ctx context.Context, request ReactivateStaffRequestObject) (ReactivateStaffResponseObject, error)
+	// AssignRole Give a staff member a role
+	// (POST /api/v1/staff/{staffId}/roles)
+	AssignRole(ctx context.Context, request AssignRoleRequestObject) (AssignRoleResponseObject, error)
+	// RevokeRole Take a role away from a staff member
+	// (POST /api/v1/staff/{staffId}/roles/{role}/revoke)
+	RevokeRole(ctx context.Context, request RevokeRoleRequestObject) (RevokeRoleResponseObject, error)
 	// ListStudents List students in the caller's tenant (cursor paginated)
 	// (GET /api/v1/students)
 	ListStudents(ctx context.Context, request ListStudentsRequestObject) (ListStudentsResponseObject, error)
@@ -6158,6 +7374,30 @@ func (sh *strictHandler) GetTrialBalance(w http.ResponseWriter, r *http.Request,
 	}
 }
 
+// ListRoles operation middleware
+func (sh *strictHandler) ListRoles(w http.ResponseWriter, r *http.Request) {
+	var request ListRolesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListRoles(ctx, request.(ListRolesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListRoles")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListRolesResponseObject); ok {
+		if err := validResponse.VisitListRolesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListSections operation middleware
 func (sh *strictHandler) ListSections(w http.ResponseWriter, r *http.Request, params ListSectionsParams) {
 	var request ListSectionsRequestObject
@@ -6315,6 +7555,204 @@ func (sh *strictHandler) MakeSessionCurrent(w http.ResponseWriter, r *http.Reque
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(MakeSessionCurrentResponseObject); ok {
 		if err := validResponse.VisitMakeSessionCurrentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListStaff operation middleware
+func (sh *strictHandler) ListStaff(w http.ResponseWriter, r *http.Request, params ListStaffParams) {
+	var request ListStaffRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListStaff(ctx, request.(ListStaffRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListStaff")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListStaffResponseObject); ok {
+		if err := validResponse.VisitListStaffResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateStaff operation middleware
+func (sh *strictHandler) CreateStaff(w http.ResponseWriter, r *http.Request, params CreateStaffParams) {
+	var request CreateStaffRequestObject
+
+	request.Params = params
+
+	var body CreateStaffJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateStaff(ctx, request.(CreateStaffRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateStaff")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateStaffResponseObject); ok {
+		if err := validResponse.VisitCreateStaffResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetStaff operation middleware
+func (sh *strictHandler) GetStaff(w http.ResponseWriter, r *http.Request, staffId openapi_types.UUID) {
+	var request GetStaffRequestObject
+
+	request.StaffId = staffId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetStaff(ctx, request.(GetStaffRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetStaff")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetStaffResponseObject); ok {
+		if err := validResponse.VisitGetStaffResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeactivateStaff operation middleware
+func (sh *strictHandler) DeactivateStaff(w http.ResponseWriter, r *http.Request, staffId openapi_types.UUID) {
+	var request DeactivateStaffRequestObject
+
+	request.StaffId = staffId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeactivateStaff(ctx, request.(DeactivateStaffRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeactivateStaff")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeactivateStaffResponseObject); ok {
+		if err := validResponse.VisitDeactivateStaffResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReactivateStaff operation middleware
+func (sh *strictHandler) ReactivateStaff(w http.ResponseWriter, r *http.Request, staffId openapi_types.UUID) {
+	var request ReactivateStaffRequestObject
+
+	request.StaffId = staffId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReactivateStaff(ctx, request.(ReactivateStaffRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReactivateStaff")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReactivateStaffResponseObject); ok {
+		if err := validResponse.VisitReactivateStaffResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AssignRole operation middleware
+func (sh *strictHandler) AssignRole(w http.ResponseWriter, r *http.Request, staffId openapi_types.UUID, params AssignRoleParams) {
+	var request AssignRoleRequestObject
+
+	request.StaffId = staffId
+	request.Params = params
+
+	var body AssignRoleJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AssignRole(ctx, request.(AssignRoleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AssignRole")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AssignRoleResponseObject); ok {
+		if err := validResponse.VisitAssignRoleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RevokeRole operation middleware
+func (sh *strictHandler) RevokeRole(w http.ResponseWriter, r *http.Request, staffId openapi_types.UUID, role RoleName) {
+	var request RevokeRoleRequestObject
+
+	request.StaffId = staffId
+	request.Role = role
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RevokeRole(ctx, request.(RevokeRoleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RevokeRole")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RevokeRoleResponseObject); ok {
+		if err := validResponse.VisitRevokeRoleResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
