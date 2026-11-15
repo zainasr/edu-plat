@@ -1,13 +1,13 @@
 # 02. `context.Context`: what it is and why every function takes it
 
-**Why it confuses people:** in Node, a request's data and cancellation live implicitly on `req` or in `AsyncLocalStorage`. In Go they are passed **explicitly** as the first argument of every function that does I/O. Once you see the three jobs, the signature stops looking strange.
+**Why it confuses people:** in Node, a request's data and cancellation live implicitly on `req` or in `AsyncLocalStorage`. In Go they are passed **explicitly** as the first argument of every function that does I/O. Once you see the three jobs, the signature stops lookig strange.
 
 ## 1. The three jobs of a context
 
 | Job | Node equivalent | Example in this product |
 |---|---|---|
 | **Cancellation**: "stop working, the caller gave up" | `AbortSignal` passed around | The browser closed the tab; the DB query stops |
-| **Deadline / timeout**: "finish within 5 s" | `AbortSignal.timeout(5000)` | Payment webhook processing must finish quickly |
+| **Deadline / timeout**: "finish within 5 s" | `AbortSignal.timeout(5000)` | Payment webhook processing must finish quickly |stop working, the caller gave up 
 | **Request-scoped values**: data for this request only | `req.locals` / `AsyncLocalStorage` | The tenant ID and the acting user |
 
 ```ts

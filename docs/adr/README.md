@@ -19,5 +19,6 @@ An ADR records one significant technical choice: the context, the options, the d
 | 0013 | Academic structure, the default branch, and cross-module calls inside one transaction | Accepted |
 | 0014 | Ledger core: balance enforced by the database, gapless numbers, internal-only posting | Accepted |
 | 0015 | Fee setup as effective-dated, append-only versions | Accepted |
+| 0016 | Web staff portal stack (Tailwind + shadcn/ui, openapi-typescript client, httpOnly cookie via Next.js server) | Accepted |
 
 Still to write when reached: token format and sessions, PDF renderer, observability stack, Terraform layout.
