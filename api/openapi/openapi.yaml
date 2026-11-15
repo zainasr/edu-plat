@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Education Platform API
-  version: 0.6.1
+  version: 0.7.0
   description: Source of truth for every capability (DEC-004). Edit this first, then the code.
 # Infrastructure endpoints (health) sit at the root for the load balancer.
 # Product endpoints carry their version in the path, for example /api/v1/students.
@@ -116,6 +116,8 @@ paths:
         Requires `student.create`. A guardian whose mobile already exists in the
         tenant joins that guardian's family (REQ-STU-004). Exactly one guardian is
         `primary`; when no guardian is `fee_payer`, the primary pays (BR-STU-006).
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -130,6 +132,7 @@ paths:
         "400": { $ref: "#/components/responses/ValidationError" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/KeyReused" }
         "500": { $ref: "#/components/responses/InternalError" }
     get:
       operationId: listStudents
@@ -752,6 +755,8 @@ paths:
         never. A student who already has a non-void challan for the month is skipped ("has_challan"), so
         running it again is safe. With `dry_run` nothing is written and each student shows whether a
         challan "will_generate". Drafts post nothing to the ledger; release does.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -766,6 +771,7 @@ paths:
         "400": { $ref: "#/components/responses/ValidationError" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/KeyReused" }
         "500": { $ref: "#/components/responses/InternalError" }
 
   /api/v1/challans/release:
@@ -778,6 +784,8 @@ paths:
         number, becomes read-only for ever (BR-FEE-001), and posts its receivable in the same transaction:
         debit Fee Receivable, credit Fee Income (BR-FEE-008). A challan that is not a draft makes the
         whole request fail with `challans.not_draft`.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -792,6 +800,7 @@ paths:
         "400": { $ref: "#/components/responses/ValidationError" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/KeyReused" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
         "500": { $ref: "#/components/responses/InternalError" }
@@ -867,6 +876,7 @@ paths:
         challan is never edited or voided here (BR-FEE-001): its void is a ledger reversal and comes
         with payments.
       parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
         - name: challanId
           in: path
           required: true
@@ -885,11 +895,28 @@ paths:
         "400": { $ref: "#/components/responses/ValidationError" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/KeyReused" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
         "500": { $ref: "#/components/responses/InternalError" }
 
 components:
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: |
+        A client-chosen unique string (8 to 128 characters: letters, digits, `.`, `_`, `:`, `-`) that makes
+        a retry safe (REQ-API-010). The key belongs to the user who first sent it, for one endpoint and one
+        exact request (path, query and body). A repeat of that request returns the original successful
+        response (header `Idempotent-Replay: true`; only the status, body and Content-Type are replayed)
+        and does nothing again. The same key with anything different, including another user, is refused
+        with 422 `idempotency.key_reused`. While the first request is still running a repeat gets 409
+        `idempotency.in_progress`. Only successful responses (below 400) are remembered, for 24 hours; an
+        error frees the key so the same request can be retried. Optional for now; payments will require it.
+      schema: { type: string, minLength: 8, maxLength: 128 }
+
   securitySchemes:
     bearerAuth:
       type: http
@@ -924,6 +951,11 @@ components:
           schema: { $ref: "#/components/schemas/ErrorEnvelope" }
     Conflict:
       description: The request clashes with existing data, for example a duplicate name
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    KeyReused:
+      description: The Idempotency-Key was already used with a different request body or endpoint
       content:
         application/json:
           schema: { $ref: "#/components/schemas/ErrorEnvelope" }

@@ -169,6 +169,20 @@ type GuardianLink struct {
 	CreatedBy             pgtype.UUID
 }
 
+type IdempotencyKey struct {
+	ID           pgtype.UUID
+	TenantID     pgtype.UUID
+	Key          string
+	Endpoint     string
+	RequestHash  []byte
+	Status       string
+	Owner        pgtype.UUID
+	ResponseCode pgtype.Int4
+	ResponseBody []byte
+	CreatedAt    pgtype.Timestamptz
+	CompletedAt  pgtype.Timestamptz
+}
+
 type JournalEntry struct {
 	ID              pgtype.UUID
 	TenantID        pgtype.UUID

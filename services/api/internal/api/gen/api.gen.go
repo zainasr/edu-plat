@@ -1041,6 +1041,9 @@ type VoidChallan struct {
 	Reason string `json:"reason"`
 }
 
+// IdempotencyKey defines model for IdempotencyKey.
+type IdempotencyKey = string
+
 // Conflict defines model for Conflict.
 type Conflict = ErrorEnvelope
 
@@ -1052,6 +1055,9 @@ type InternalError = ErrorEnvelope
 
 // InvalidCredentials defines model for InvalidCredentials.
 type InvalidCredentials = ErrorEnvelope
+
+// KeyReused defines model for KeyReused.
+type KeyReused = ErrorEnvelope
 
 // NotFound defines model for NotFound.
 type NotFound = ErrorEnvelope
@@ -1073,6 +1079,45 @@ type ListChallansParams struct {
 	StudentId *openapi_types.UUID `form:"student_id,omitempty" json:"student_id,omitempty"`
 	Limit     *int                `form:"limit,omitempty" json:"limit,omitempty"`
 	Cursor    *string             `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// GenerateChallansParams defines parameters for GenerateChallans.
+type GenerateChallansParams struct {
+	// IdempotencyKey A client-chosen unique string (8 to 128 characters: letters, digits, `.`, `_`, `:`, `-`) that makes
+	// a retry safe (REQ-API-010). The key belongs to the user who first sent it, for one endpoint and one
+	// exact request (path, query and body). A repeat of that request returns the original successful
+	// response (header `Idempotent-Replay: true`; only the status, body and Content-Type are replayed)
+	// and does nothing again. The same key with anything different, including another user, is refused
+	// with 422 `idempotency.key_reused`. While the first request is still running a repeat gets 409
+	// `idempotency.in_progress`. Only successful responses (below 400) are remembered, for 24 hours; an
+	// error frees the key so the same request can be retried. Optional for now; payments will require it.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// ReleaseChallansParams defines parameters for ReleaseChallans.
+type ReleaseChallansParams struct {
+	// IdempotencyKey A client-chosen unique string (8 to 128 characters: letters, digits, `.`, `_`, `:`, `-`) that makes
+	// a retry safe (REQ-API-010). The key belongs to the user who first sent it, for one endpoint and one
+	// exact request (path, query and body). A repeat of that request returns the original successful
+	// response (header `Idempotent-Replay: true`; only the status, body and Content-Type are replayed)
+	// and does nothing again. The same key with anything different, including another user, is refused
+	// with 422 `idempotency.key_reused`. While the first request is still running a repeat gets 409
+	// `idempotency.in_progress`. Only successful responses (below 400) are remembered, for 24 hours; an
+	// error frees the key so the same request can be retried. Optional for now; payments will require it.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// VoidChallanParams defines parameters for VoidChallan.
+type VoidChallanParams struct {
+	// IdempotencyKey A client-chosen unique string (8 to 128 characters: letters, digits, `.`, `_`, `:`, `-`) that makes
+	// a retry safe (REQ-API-010). The key belongs to the user who first sent it, for one endpoint and one
+	// exact request (path, query and body). A repeat of that request returns the original successful
+	// response (header `Idempotent-Replay: true`; only the status, body and Content-Type are replayed)
+	// and does nothing again. The same key with anything different, including another user, is refused
+	// with 422 `idempotency.key_reused`. While the first request is still running a repeat gets 409
+	// `idempotency.in_progress`. Only successful responses (below 400) are remembered, for 24 hours; an
+	// error frees the key so the same request can be retried. Optional for now; payments will require it.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // GetFeePlanParams defines parameters for GetFeePlan.
@@ -1102,6 +1147,19 @@ type ListSectionsParams struct {
 type ListStudentsParams struct {
 	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
 	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// CreateStudentParams defines parameters for CreateStudent.
+type CreateStudentParams struct {
+	// IdempotencyKey A client-chosen unique string (8 to 128 characters: letters, digits, `.`, `_`, `:`, `-`) that makes
+	// a retry safe (REQ-API-010). The key belongs to the user who first sent it, for one endpoint and one
+	// exact request (path, query and body). A repeat of that request returns the original successful
+	// response (header `Idempotent-Replay: true`; only the status, body and Content-Type are replayed)
+	// and does nothing again. The same key with anything different, including another user, is refused
+	// with 422 `idempotency.key_reused`. While the first request is still running a repeat gets 409
+	// `idempotency.in_progress`. Only successful responses (below 400) are remembered, for 24 hours; an
+	// error frees the key so the same request can be retried. Optional for now; payments will require it.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // GetFeeStructureParams defines parameters for GetFeeStructure.
@@ -1168,16 +1226,16 @@ type ServerInterface interface {
 	ListChallans(w http.ResponseWriter, r *http.Request, params ListChallansParams)
 	// GenerateChallans Draft the month's challans for every billable student (or preview them)
 	// (POST /api/v1/challans/generate)
-	GenerateChallans(w http.ResponseWriter, r *http.Request)
+	GenerateChallans(w http.ResponseWriter, r *http.Request, params GenerateChallansParams)
 	// ReleaseChallans Release draft challans in bulk
 	// (POST /api/v1/challans/release)
-	ReleaseChallans(w http.ResponseWriter, r *http.Request)
+	ReleaseChallans(w http.ResponseWriter, r *http.Request, params ReleaseChallansParams)
 	// GetChallan One challan with its lines
 	// (GET /api/v1/challans/{challanId})
 	GetChallan(w http.ResponseWriter, r *http.Request, challanId openapi_types.UUID)
 	// VoidChallan Void a draft challan
 	// (POST /api/v1/challans/{challanId}/void)
-	VoidChallan(w http.ResponseWriter, r *http.Request, challanId openapi_types.UUID)
+	VoidChallan(w http.ResponseWriter, r *http.Request, challanId openapi_types.UUID, params VoidChallanParams)
 	// ListClasses List the classes, ordered by grade level
 	// (GET /api/v1/classes)
 	ListClasses(w http.ResponseWriter, r *http.Request)
@@ -1237,7 +1295,7 @@ type ServerInterface interface {
 	ListStudents(w http.ResponseWriter, r *http.Request, params ListStudentsParams)
 	// CreateStudent Enrol a student with at least one guardian
 	// (POST /api/v1/students)
-	CreateStudent(w http.ResponseWriter, r *http.Request)
+	CreateStudent(w http.ResponseWriter, r *http.Request, params CreateStudentParams)
 	// GetStudent Read one student with guardians
 	// (GET /api/v1/students/{studentId})
 	GetStudent(w http.ResponseWriter, r *http.Request, studentId openapi_types.UUID)
@@ -1403,8 +1461,35 @@ func (siw *ServerInterfaceWrapper) ListChallans(w http.ResponseWriter, r *http.R
 // GenerateChallans operation middleware
 func (siw *ServerInterfaceWrapper) GenerateChallans(w http.ResponseWriter, r *http.Request) {
 
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GenerateChallansParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GenerateChallans(w, r)
+		siw.Handler.GenerateChallans(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1417,8 +1502,35 @@ func (siw *ServerInterfaceWrapper) GenerateChallans(w http.ResponseWriter, r *ht
 // ReleaseChallans operation middleware
 func (siw *ServerInterfaceWrapper) ReleaseChallans(w http.ResponseWriter, r *http.Request) {
 
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ReleaseChallansParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ReleaseChallans(w, r)
+		siw.Handler.ReleaseChallans(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1469,8 +1581,32 @@ func (siw *ServerInterfaceWrapper) VoidChallan(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params VoidChallanParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.VoidChallan(w, r, challanId)
+		siw.Handler.VoidChallan(w, r, challanId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1963,8 +2099,35 @@ func (siw *ServerInterfaceWrapper) ListStudents(w http.ResponseWriter, r *http.R
 // CreateStudent operation middleware
 func (siw *ServerInterfaceWrapper) CreateStudent(w http.ResponseWriter, r *http.Request) {
 
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateStudentParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.CreateStudent(w, r)
+		siw.Handler.CreateStudent(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2342,6 +2505,8 @@ type InternalErrorJSONResponse ErrorEnvelope
 
 type InvalidCredentialsJSONResponse ErrorEnvelope
 
+type KeyReusedJSONResponse ErrorEnvelope
+
 type NotFoundJSONResponse ErrorEnvelope
 
 type OtpLockedJSONResponse ErrorEnvelope
@@ -2620,7 +2785,8 @@ func (response ListChallans500JSONResponse) VisitListChallansResponse(w http.Res
 }
 
 type GenerateChallansRequestObject struct {
-	Body *GenerateChallansJSONRequestBody
+	Params GenerateChallansParams
+	Body   *GenerateChallansJSONRequestBody
 }
 
 type GenerateChallansResponseObject interface {
@@ -2683,6 +2849,20 @@ func (response GenerateChallans403JSONResponse) VisitGenerateChallansResponse(w 
 	return err
 }
 
+type GenerateChallans422JSONResponse struct{ KeyReusedJSONResponse }
+
+func (response GenerateChallans422JSONResponse) VisitGenerateChallansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GenerateChallans500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response GenerateChallans500JSONResponse) VisitGenerateChallansResponse(w http.ResponseWriter) error {
@@ -2698,7 +2878,8 @@ func (response GenerateChallans500JSONResponse) VisitGenerateChallansResponse(w 
 }
 
 type ReleaseChallansRequestObject struct {
-	Body *ReleaseChallansJSONRequestBody
+	Params ReleaseChallansParams
+	Body   *ReleaseChallansJSONRequestBody
 }
 
 type ReleaseChallansResponseObject interface {
@@ -2785,6 +2966,20 @@ func (response ReleaseChallans409JSONResponse) VisitReleaseChallansResponse(w ht
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReleaseChallans422JSONResponse struct{ KeyReusedJSONResponse }
+
+func (response ReleaseChallans422JSONResponse) VisitReleaseChallansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -2883,6 +3078,7 @@ func (response GetChallan500JSONResponse) VisitGetChallanResponse(w http.Respons
 
 type VoidChallanRequestObject struct {
 	ChallanId openapi_types.UUID `json:"challanId"`
+	Params    VoidChallanParams
 	Body      *VoidChallanJSONRequestBody
 }
 
@@ -2970,6 +3166,20 @@ func (response VoidChallan409JSONResponse) VisitVoidChallanResponse(w http.Respo
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type VoidChallan422JSONResponse struct{ KeyReusedJSONResponse }
+
+func (response VoidChallan422JSONResponse) VisitVoidChallanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -4512,7 +4722,8 @@ func (response ListStudents500JSONResponse) VisitListStudentsResponse(w http.Res
 }
 
 type CreateStudentRequestObject struct {
-	Body *CreateStudentJSONRequestBody
+	Params CreateStudentParams
+	Body   *CreateStudentJSONRequestBody
 }
 
 type CreateStudentResponseObject interface {
@@ -4571,6 +4782,20 @@ func (response CreateStudent403JSONResponse) VisitCreateStudentResponse(w http.R
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateStudent422JSONResponse struct{ KeyReusedJSONResponse }
+
+func (response CreateStudent422JSONResponse) VisitCreateStudentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -5482,8 +5707,10 @@ func (sh *strictHandler) ListChallans(w http.ResponseWriter, r *http.Request, pa
 }
 
 // GenerateChallans operation middleware
-func (sh *strictHandler) GenerateChallans(w http.ResponseWriter, r *http.Request) {
+func (sh *strictHandler) GenerateChallans(w http.ResponseWriter, r *http.Request, params GenerateChallansParams) {
 	var request GenerateChallansRequestObject
+
+	request.Params = params
 
 	var body GenerateChallansJSONRequestBody
 	if err := runtime.BindJSONBody(r, &body); err != nil {
@@ -5513,8 +5740,10 @@ func (sh *strictHandler) GenerateChallans(w http.ResponseWriter, r *http.Request
 }
 
 // ReleaseChallans operation middleware
-func (sh *strictHandler) ReleaseChallans(w http.ResponseWriter, r *http.Request) {
+func (sh *strictHandler) ReleaseChallans(w http.ResponseWriter, r *http.Request, params ReleaseChallansParams) {
 	var request ReleaseChallansRequestObject
+
+	request.Params = params
 
 	var body ReleaseChallansJSONRequestBody
 	if err := runtime.BindJSONBody(r, &body); err != nil {
@@ -5570,10 +5799,11 @@ func (sh *strictHandler) GetChallan(w http.ResponseWriter, r *http.Request, chal
 }
 
 // VoidChallan operation middleware
-func (sh *strictHandler) VoidChallan(w http.ResponseWriter, r *http.Request, challanId openapi_types.UUID) {
+func (sh *strictHandler) VoidChallan(w http.ResponseWriter, r *http.Request, challanId openapi_types.UUID, params VoidChallanParams) {
 	var request VoidChallanRequestObject
 
 	request.ChallanId = challanId
+	request.Params = params
 
 	var body VoidChallanJSONRequestBody
 	if err := runtime.BindJSONBody(r, &body); err != nil {
@@ -6119,8 +6349,10 @@ func (sh *strictHandler) ListStudents(w http.ResponseWriter, r *http.Request, pa
 }
 
 // CreateStudent operation middleware
-func (sh *strictHandler) CreateStudent(w http.ResponseWriter, r *http.Request) {
+func (sh *strictHandler) CreateStudent(w http.ResponseWriter, r *http.Request, params CreateStudentParams) {
 	var request CreateStudentRequestObject
+
+	request.Params = params
 
 	var body CreateStudentJSONRequestBody
 	if err := runtime.BindJSONBody(r, &body); err != nil {
