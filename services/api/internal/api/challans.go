@@ -192,7 +192,7 @@ func toAPIChallan(c fees.Challan) (gen.Challan, error) {
 	return gen.Challan{
 		Id: id, StudentId: studentID, FamilyId: familyID,
 		Month: openapitypes.Date{Time: c.Month}, DueDate: openapitypes.Date{Time: c.DueDate},
-		Status: gen.ChallanStatus(c.Status), Total: toAPIMoney(c.Total),
+		Status: gen.ChallanStatus(c.Status), NewAdmission: c.NewAdmission, Total: toAPIMoney(c.Total),
 		ChallanNo: c.ChallanNo, ConsumerNo: c.ConsumerNo, Lines: lines,
 		ReleasedAt: c.ReleasedAt, VoidReason: c.VoidReason, CreatedAt: c.CreatedAt,
 	}, nil

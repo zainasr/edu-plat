@@ -417,9 +417,12 @@ type Challan struct {
 	Id         openapi_types.UUID `json:"id"`
 	Lines      []ChallanLine      `json:"lines"`
 	Month      openapi_types.Date `json:"month"`
-	ReleasedAt *time.Time         `json:"released_at,omitempty"`
-	Status     ChallanStatus      `json:"status"`
-	StudentId  openapi_types.UUID `json:"student_id"`
+
+	// NewAdmission True when this is the month of the student's first enrolment. It marks an exception for the reviewer; it is worked out when the challan is read, not stored.
+	NewAdmission bool               `json:"new_admission"`
+	ReleasedAt   *time.Time         `json:"released_at,omitempty"`
+	Status       ChallanStatus      `json:"status"`
+	StudentId    openapi_types.UUID `json:"student_id"`
 
 	// Total An amount in minor units (paisa). Never a decimal or a float (API conventions §2).
 	Total      Money   `json:"total"`

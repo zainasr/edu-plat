@@ -39,19 +39,22 @@ type ChallanLine struct {
 
 // Challan is a monthly voucher for one student.
 type Challan struct {
-	ID         string
-	StudentID  string
-	FamilyID   string
-	Month      time.Time
-	DueDate    time.Time
-	Status     string
-	Total      money.Money
-	ChallanNo  *int64
-	ConsumerNo *string
-	Lines      []ChallanLine
-	ReleasedAt *time.Time
-	VoidReason *string
-	CreatedAt  time.Time
+	ID        string
+	StudentID string
+	FamilyID  string
+	Month     time.Time
+	DueDate   time.Time
+	Status    string
+	// NewAdmission marks the month of the student's first enrolment, an exception for the reviewer.
+	// It is worked out when the challan is read; nothing is stored.
+	NewAdmission bool
+	Total        money.Money
+	ChallanNo    *int64
+	ConsumerNo   *string
+	Lines        []ChallanLine
+	ReleasedAt   *time.Time
+	VoidReason   *string
+	CreatedAt    time.Time
 }
 
 // GenerateItem is what happened (or would happen) for one student.
@@ -92,7 +95,7 @@ type ChallanFilter struct {
 // Generate drafts the month's challans, or previews them with DryRun (REQ-FEE-003). It is idempotent:
 // a student who already has a draft or released challan for the month is skipped.
 func (s *Service) Generate(ctx context.Context, p iam.Principal, in GenerateInput) (GenerateResult, error) {
-	month, due, err := validateGenerate(in)
+	month, due, err := validateGenerate(in, s.now().In(pakistanZone))
 	if err != nil {
 		return GenerateResult{}, err
 	}
@@ -301,7 +304,7 @@ func (s *Service) Release(ctx context.Context, p iam.Principal, ids []string) ([
 				return err
 			}
 		}
-		out, err = readChallans(ctx, q, tenant, ordered)
+		out, err = s.readChallans(ctx, tx, p.TenantID, tenant, ordered)
 		return err
 	})
 	return out, err
@@ -340,7 +343,7 @@ func (s *Service) Void(ctx context.Context, p iam.Principal, id, reason string) 
 		if err := s.audit(ctx, tx, p, "challan.voided", "challan", id, map[string]any{"reason": reason}); err != nil {
 			return err
 		}
-		list, err := readChallans(ctx, q, tenant, []string{id})
+		list, err := s.readChallans(ctx, tx, p.TenantID, tenant, []string{id})
 		if err != nil {
 			return err
 		}
@@ -361,7 +364,7 @@ func (s *Service) GetChallan(ctx context.Context, p iam.Principal, id string) (C
 		if _, err := db.ParseUUID(id); err != nil {
 			return errChallanNotFound
 		}
-		list, err := readChallans(ctx, gen.New(tx), tenant, []string{id})
+		list, err := s.readChallans(ctx, tx, p.TenantID, tenant, []string{id})
 		if err != nil {
 			return err
 		}
@@ -435,6 +438,9 @@ func (s *Service) ListChallans(ctx context.Context, p iam.Principal, f ChallanFi
 		for _, r := range rows {
 			page.Items = append(page.Items, toChallan(challanRow(r), lines[db.UUIDString(r.ID)]))
 		}
+		if err := s.markNewAdmissions(ctx, tx, p.TenantID, page.Items); err != nil {
+			return err
+		}
 		if more && len(rows) > 0 {
 			last := rows[len(rows)-1]
 			page.NextCursor = encodeChallanCursor(last.CreatedAt.Time, db.UUIDString(last.ID))
@@ -480,7 +486,8 @@ func toChallan(r challanRow, lines []ChallanLine) Challan {
 }
 
 // readChallans loads the given challans (in the order asked) with their lines.
-func readChallans(ctx context.Context, q *gen.Queries, tenant pgtype.UUID, ids []string) ([]Challan, error) {
+func (s *Service) readChallans(ctx context.Context, tx pgx.Tx, tenantID string, tenant pgtype.UUID, ids []string) ([]Challan, error) {
+	q := gen.New(tx)
 	uuids := make([]pgtype.UUID, 0, len(ids))
 	for _, id := range ids {
 		u, err := db.ParseUUID(id)
@@ -504,7 +511,29 @@ func readChallans(ctx context.Context, q *gen.Queries, tenant pgtype.UUID, ids [
 		}
 		out = append(out, toChallan(r, lines[db.UUIDString(u)]))
 	}
-	return out, nil
+	return out, s.markNewAdmissions(ctx, tx, tenantID, out)
+}
+
+// markNewAdmissions sets NewAdmission on each challan by asking the students module for the date the
+// student first enrolled (ADR-0013). A challan for that month is a new admission.
+func (s *Service) markNewAdmissions(ctx context.Context, tx pgx.Tx, tenantID string, list []Challan) error {
+	if len(list) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(list))
+	for _, c := range list {
+		ids = append(ids, c.StudentID)
+	}
+	first, err := s.students.FirstEnrolmentDates(ctx, tx, tenantID, ids)
+	if err != nil {
+		return err
+	}
+	for i := range list {
+		if d, ok := first[list[i].StudentID]; ok {
+			list[i].NewAdmission = monthStart(d).Equal(monthStart(list[i].Month))
+		}
+	}
+	return nil
 }
 
 func loadChallanLines(ctx context.Context, q *gen.Queries, tenant pgtype.UUID, ids []pgtype.UUID) (map[string][]ChallanLine, error) {

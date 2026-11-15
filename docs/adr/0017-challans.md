@@ -34,10 +34,13 @@ A challan is the monthly voucher a school sends for each student. It must be dra
 ## Lock order (found in review)
 Release locks every challan in the batch, in id order, before it takes any number. The number counter is one row per school and is held until commit, so taking it between challan locks let two overlapping batches wait on each other. `TestREQ_FEE_004_OverlappingReleaseBatchesDoNotDeadlock` runs 30 rounds of overlapping batches and fails if the old order returns (mutation checked).
 
-## Open points for the owner (not decided here)
-- **Idempotency-Key on release (REQ-API-010).** Not implemented. A retried release after a lost response gets 409 `challans.not_draft` instead of the original result. No double posting is possible (row lock plus the draft condition), so this is a convenience gap, not a money risk.
-- **Void of a draft uses `fee.generate`.** The permission catalogue has no void-challan permission. Assumed, pending confirmation.
-- **Month bounds.** Generate accepts any month, including past (backfill) and far future. Books are dated the release day, not the challan month.
-- **Exceptions list.** `new_admission` is returned by Generate but not stored on the draft, so a later review screen cannot show it without recomputing. Discount-change and mid-month-joiner exceptions are not built.
-- **Generate size.** One transaction for the whole school with per-student queries. Fine for a school of hundreds; revisit with the job queue (ADR-0005).
-- **Permission tests.** Only the owner role exists, so no test can prove that release needs `fee.release` rather than `fee.view` (mutation survived). Add built-in Accountant and Receptionist roles, then a test per role.
+## Owner decisions after review (2026-11-15)
+1. **Idempotency-Key on release (REQ-API-010): in the next slice**, built once for release and payments. Until then a retried release gets 409 `challans.not_draft`; no double posting is possible (row lock plus the draft condition).
+2. **Void of a draft uses `fee.generate`.** The catalogue has no void-challan permission; a draft changes no money.
+3. **The exceptions list is recomputed, not stored.** `new_admission` is set on every challan read from the student's first enrolment date (students module, ADR-0013). Discount-change and mid-month-joiner exceptions are not built.
+4. **Month bounds:** past months are allowed (backfill); a month more than one ahead of today (Pakistan time) is refused with `fees.generate_invalid` on `month`. Books are still dated the release day.
+5. **Built-in roles Accountant and Receptionist** were added (migration 00009, `iam/principal.go`) and `TestREQ_IAM_005_BuiltInRolesHoldTheirPermissions` checks every role against every endpoint it should and should not reach. This closed the gap where `fee.release` could be swapped for `fee.view` unnoticed. Each new endpoint adds a row to that test.
+
+## Known limits
+- Generate runs the whole school in one transaction with per-student queries. Fine for hundreds of students; revisit with the job queue (ADR-0005).
+- Challan books date is the release day, not the challan month.

@@ -67,19 +67,20 @@ func TestREQ_FEE_003_AnnualWithoutAnAnchorIsNotDue(t *testing.T) {
 }
 
 func TestREQ_FEE_003_ValidateGenerate(t *testing.T) {
-	m, due, err := validateGenerate(GenerateInput{Month: day(2026, time.August, 19)})
+	now := day(2026, time.August, 19)
+	m, due, err := validateGenerate(GenerateInput{Month: day(2026, time.August, 19)}, now)
 	if err != nil || !m.Equal(month(2026, time.August)) || !due.Equal(day(2026, time.August, 10)) {
 		t.Fatalf("defaults: month %v due %v err %v", m, due, err)
 	}
-	if _, _, err := validateGenerate(GenerateInput{}); err == nil {
+	if _, _, err := validateGenerate(GenerateInput{}, now); err == nil {
 		t.Fatal("a missing month must be refused")
 	}
 	early := day(2026, time.July, 31)
-	if _, _, err := validateGenerate(GenerateInput{Month: month(2026, time.August), DueDate: &early}); err == nil {
+	if _, _, err := validateGenerate(GenerateInput{Month: month(2026, time.August), DueDate: &early}, now); err == nil {
 		t.Fatal("a due date before the month starts must be refused")
 	}
 	same := month(2026, time.August)
-	if _, _, err := validateGenerate(GenerateInput{Month: month(2026, time.August), DueDate: &same}); err != nil {
+	if _, _, err := validateGenerate(GenerateInput{Month: month(2026, time.August), DueDate: &same}, now); err != nil {
 		t.Fatalf("a due date on the first of the month is allowed: %v", err)
 	}
 }
@@ -159,5 +160,43 @@ func TestREQ_FEE_004_ValidateVoidReason(t *testing.T) {
 	}
 	if _, err := validateVoidReason(string(long[:300])); err != nil {
 		t.Fatalf("300 characters are allowed: %v", err)
+	}
+}
+
+// Owner decision 2026-11-15: past months are allowed (backfill); a month more than one ahead is not.
+func TestREQ_FEE_003_GenerateMonthBounds(t *testing.T) {
+	now := day(2026, time.August, 19)
+	cases := []struct {
+		name  string
+		month time.Time
+		ok    bool
+	}{
+		{"this month", month(2026, time.August), true},
+		{"next month", month(2026, time.September), true},
+		{"two months ahead", month(2026, time.October), false},
+		{"far future", month(2031, time.January), false},
+		{"last month (backfill)", month(2026, time.July), true},
+		{"years ago (backfill)", month(2020, time.January), true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, _, err := validateGenerate(GenerateInput{Month: c.month}, now)
+			if c.ok && err != nil {
+				t.Fatalf("must be allowed: %v", err)
+			}
+			if !c.ok {
+				if err == nil {
+					t.Fatal("must be refused")
+				}
+				if f := fieldsOf(err); len(f) != 1 || f[0] != "month" {
+					t.Fatalf("the month field must be named, got %v", f)
+				}
+			}
+		})
+	}
+	// "Next month" is decided by the clock in Pakistan: at 00:30 on 1 September there it is still 31 August in UTC.
+	late := time.Date(2026, time.August, 31, 20, 0, 0, 0, time.UTC) // 01:00 on 1 September in Karachi
+	if _, _, err := validateGenerate(GenerateInput{Month: month(2026, time.October)}, late.In(pakistanZone)); err != nil {
+		t.Fatalf("on 1 September in Pakistan, October is next month: %v", err)
 	}
 }

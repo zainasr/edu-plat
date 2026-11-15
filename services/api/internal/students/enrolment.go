@@ -349,3 +349,29 @@ func (s *Service) BillableStudents(ctx context.Context, tx pgx.Tx, tenantID stri
 	}
 	return out, nil
 }
+
+// FirstEnrolmentDates returns the date each given student first enrolled, keyed by student id, inside
+// the caller's open tenant transaction. Unknown students are absent.
+func (s *Service) FirstEnrolmentDates(ctx context.Context, tx pgx.Tx, tenantID string, studentIDs []string) (map[string]time.Time, error) {
+	tenant, err := db.ParseUUID(tenantID)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]pgtype.UUID, 0, len(studentIDs))
+	for _, id := range studentIDs {
+		u, err := db.ParseUUID(id)
+		if err != nil {
+			return nil, err
+		}
+		ids = append(ids, u)
+	}
+	rows, err := gen.New(tx).FirstEnrolmentDates(ctx, gen.FirstEnrolmentDatesParams{TenantID: tenant, StudentIds: ids})
+	if err != nil {
+		return nil, fmt.Errorf("first enrolment dates: %w", err)
+	}
+	out := make(map[string]time.Time, len(rows))
+	for _, r := range rows {
+		out[db.UUIDString(r.StudentID)] = r.FirstStartedOn.Time
+	}
+	return out, nil
+}

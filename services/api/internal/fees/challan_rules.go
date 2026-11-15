@@ -29,13 +29,18 @@ type GenerateInput struct {
 }
 
 // validateGenerate normalises the month to its first day and picks the due date (the 10th by default).
-func validateGenerate(in GenerateInput) (month, due time.Time, err error) {
+// Past months are allowed (backfill); a month more than one ahead of now is refused (owner decision,
+// 2026-11-15). Pass now in Pakistan time, since "this month" is decided there.
+func validateGenerate(in GenerateInput, now time.Time) (month, due time.Time, err error) {
 	var f fieldErrors
 	if in.Month.IsZero() {
 		f.add("month", "Required.")
 		return time.Time{}, time.Time{}, f.err("fees.generate_invalid")
 	}
 	month = monthStart(in.Month)
+	if month.After(monthStart(now).AddDate(0, 1, 0)) {
+		f.add("month", "Cannot be more than one month ahead.")
+	}
 	due = time.Date(month.Year(), month.Month(), defaultDueDay, 0, 0, 0, 0, time.UTC)
 	if in.DueDate != nil {
 		due = time.Date(in.DueDate.Year(), in.DueDate.Month(), in.DueDate.Day(), 0, 0, 0, 0, time.UTC)

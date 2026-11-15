@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Education Platform API
-  version: 0.6.0
+  version: 0.6.1
   description: Source of truth for every capability (DEC-004). Edit this first, then the code.
 # Infrastructure endpoints (health) sit at the root for the load balancer.
 # Product endpoints carry their version in the path, for example /api/v1/students.
@@ -1591,7 +1591,7 @@ components:
 
     Challan:
       type: object
-      required: [id, student_id, family_id, month, due_date, status, total, lines, created_at]
+      required: [id, student_id, family_id, month, due_date, status, new_admission, total, lines, created_at]
       properties:
         id: { type: string, format: uuid }
         student_id: { type: string, format: uuid }
@@ -1599,6 +1599,9 @@ components:
         month: { type: string, format: date }
         due_date: { type: string, format: date }
         status: { $ref: "#/components/schemas/ChallanStatus" }
+        new_admission:
+          type: boolean
+          description: True when this is the month of the student's first enrolment. It marks an exception for the reviewer; it is worked out when the challan is read, not stored.
         total: { $ref: "#/components/schemas/Money" }
         challan_no:
           type: integer

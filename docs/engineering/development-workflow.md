@@ -60,7 +60,7 @@ Stop and ask before deciding anything about money rules, security, permissions, 
 
 ## 9. Checklists
 **New table:** `tenant_id` · tenant-leading index · composite FKs · RLS `NULLIF` policy · grants without DELETE · append-only trigger if history · Down section · `TestINV_*` still green · scratch migration gate green.
-**New endpoint:** in `openapi.yaml` first · `iam.Require` with a named permission from the catalogue · 401/403 covered (the invariant test does it) · audit entry on mutations · error codes in the contract · public endpoints are not allowed without the owner's decision.
+**New endpoint:** in `openapi.yaml` first · `iam.Require` with a named permission from the catalogue · 401/403 covered (the invariant test does it) · audit entry on mutations · error codes in the contract · public endpoints are not allowed without the owner's decision · add a row to `TestREQ_IAM_005_BuiltInRolesHoldTheirPermissions` (`internal/integration/roles_test.go`) saying which built-in roles may call it.
 **Money action:** `money.Money` only · `ledger.Post` in the same transaction · balanced · idempotent where retried · reversal instead of edit · a mutation check on the balance rule.
 **New dependency:** ask the owner · short ADR · pinned version.
 **Hook or skill change:** add a case to `scripts/test-hooks.sh` · `make test-hooks` · update `docs/engineering/agentic-sdlc.md`.

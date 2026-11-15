@@ -10,6 +10,7 @@ import (
 
 	"github.com/zainasr/edu-plat/services/api/internal/fees"
 	"github.com/zainasr/edu-plat/services/api/internal/platform/db"
+	"github.com/zainasr/edu-plat/services/api/internal/platform/money"
 )
 
 var karachi = time.FixedZone("PKT", 5*60*60)
@@ -38,6 +39,16 @@ func itemFor(t *testing.T, res fees.GenerateResult, studentID string) fees.Gener
 	}
 	t.Fatalf("student %s is not in the result: %+v", studentID, res.Items)
 	return fees.GenerateItem{}
+}
+
+// backdate moves every enrolment of the school back by the given number of months, so that past
+// months can be generated (backfill). Months in the future are limited to one ahead.
+func (w feeWorld) backdate(t *testing.T, f *fixture, months int) {
+	t.Helper()
+	from := thisMonth().AddDate(0, -months, 0)
+	if _, err := f.admin.Exec(context.Background(), `UPDATE enrolments SET started_on = $2 WHERE tenant_id = $1`, w.tenantID, from); err != nil {
+		t.Fatalf("backdate enrolments: %v", err)
+	}
 }
 
 // addStudent enrols another student in the world's school, in the world's class and section.
@@ -162,22 +173,22 @@ func TestREQ_FEE_003_OverridesAndConcessions(t *testing.T) {
 func TestREQ_FEE_002_AnnualAndAdHocLines(t *testing.T) {
 	f := newFixture(t)
 	w := newFeeWorld(t, f, "chal-annual")
+	w.backdate(t, f, 14)
 	m := thisMonth()
-	w.setLine(t, f, "tuition", 500000, "monthly", "2026-01-01")
-	w.setLine(t, f, "annual", 250000, "annual", m.Format("2006-01-02")) // anchored to this month of the year
-	w.setLine(t, f, "registration", 80000, "ad_hoc", "2026-01-01")
+	anchor := m.AddDate(0, -12, 0) // the annual fee first took effect a year ago, in this month of the year
+	w.setLine(t, f, "tuition", 500000, "monthly", "2020-01-01")
+	w.setLine(t, f, "annual", 250000, "annual", anchor.Format("2006-01-02"))
+	w.setLine(t, f, "registration", 80000, "ad_hoc", "2020-01-01")
 
-	this := itemFor(t, w.generate(t, f, m, true), w.studentID)
-	if this.Total != 750000 {
-		t.Fatalf("anchor month: want tuition + annual = 750000, got %+v", this)
-	}
-	nextYear := itemFor(t, w.generate(t, f, m.AddDate(1, 0, 0), true), w.studentID)
-	if nextYear.Total != 750000 {
-		t.Fatalf("the annual fee falls again a year later: %+v", nextYear)
-	}
-	other := itemFor(t, w.generate(t, f, m.AddDate(0, 3, 0), true), w.studentID)
-	if other.Total != 500000 {
-		t.Fatalf("three months on: only tuition: %+v", other)
+	for months, want := range map[int]int64{
+		-12: 750000, // the anchor month
+		0:   750000, // a year later, this month
+		-9:  500000, // three months after the anchor: only tuition
+		-1:  500000,
+	} {
+		if got := itemFor(t, w.generate(t, f, m.AddDate(0, months, 0), true), w.studentID); got.Total != money.Money(want) {
+			t.Fatalf("month %+d: want %d, got %+v", months, want, got)
+		}
 	}
 }
 
@@ -559,17 +570,18 @@ func TestREQ_FEE_003_GenerateRefusals(t *testing.T) {
 
 // Overlapping multi-challan batches must finish, not deadlock: A releases {0,1,2}, B releases {2,3,4}.
 // Whoever loses the shared challan gets challans.not_draft, never a database deadlock (a 500). The
-// race is a matter of timing, so it runs many rounds, each with fresh drafts (one month per round).
+// race is a matter of timing, so it runs many rounds, each with fresh drafts (one past month per round).
 func TestREQ_FEE_004_OverlappingReleaseBatchesDoNotDeadlock(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()
 	w := newFeeWorld(t, f, "chal-dead")
-	w.setLine(t, f, "tuition", 500000, "monthly", "2026-01-01")
+	w.setLine(t, f, "tuition", 500000, "monthly", "2020-01-01")
 	for _, n := range []string{"Two", "Three", "Four", "Five"} {
 		w.addStudent(t, f, n+" Khan")
 	}
+	w.backdate(t, f, 40) // after the students exist, so all five are billable in past months
 	for round := range 30 {
-		res := w.generate(t, f, thisMonth().AddDate(0, round, 0), false)
+		res := w.generate(t, f, thisMonth().AddDate(0, -round, 0), false)
 		ids := make([]string, 0, len(res.Items))
 		for _, it := range res.Items {
 			ids = append(ids, it.ChallanID)
@@ -659,15 +671,72 @@ func TestBR_FEE_006_ExistingChallanSurvivesWithdrawal(t *testing.T) {
 func TestREQ_FEE_002_OneTimeOnlyInTheAdmissionMonth(t *testing.T) {
 	f := newFixture(t)
 	w := newFeeWorld(t, f, "chal-once")
-	w.setLine(t, f, "tuition", 500000, "monthly", "2026-01-01")
-	w.setLine(t, f, "admission", 100000, "one_time", "2026-01-01")
+	w.backdate(t, f, 14)
+	w.setLine(t, f, "tuition", 500000, "monthly", "2020-01-01")
+	w.setLine(t, f, "admission", 100000, "one_time", "2020-01-01")
 	m := thisMonth()
-	if got := itemFor(t, w.generate(t, f, m, true), w.studentID); got.Total != 600000 {
+	admitted := m.AddDate(0, -14, 0)
+	if got := itemFor(t, w.generate(t, f, admitted, true), w.studentID); got.Total != 600000 || !got.NewAdmission {
 		t.Fatalf("admission month: %+v", got)
 	}
 	for i := 1; i <= 14; i++ {
-		if got := itemFor(t, w.generate(t, f, m.AddDate(0, i, 0), true), w.studentID); got.Total != 500000 || got.NewAdmission {
-			t.Fatalf("month +%d must not carry the one-time fee: %+v", i, got)
+		if got := itemFor(t, w.generate(t, f, admitted.AddDate(0, i, 0), true), w.studentID); got.Total != 500000 || got.NewAdmission {
+			t.Fatalf("month admission%+d must not carry the one-time fee: %+v", i, got)
 		}
+	}
+}
+
+// Owner decision 2026-11-15: past months are allowed (backfill), more than one month ahead is refused.
+func TestREQ_FEE_003_GenerateRefusesFarFutureMonths(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	w := newFeeWorld(t, f, "chal-future")
+	w.setLine(t, f, "tuition", 500000, "monthly", "2020-01-01")
+	for _, dry := range []bool{true, false} {
+		if _, err := f.fees.Generate(ctx, w.p, fees.GenerateInput{Month: thisMonth().AddDate(0, 2, 0), DryRun: dry}); errCode(t, err) != "fees.generate_invalid" {
+			t.Fatalf("two months ahead (dry_run=%v): %v", dry, err)
+		}
+	}
+	if _, err := f.fees.Generate(ctx, w.p, fees.GenerateInput{Month: thisMonth().AddDate(0, 1, 0), DryRun: true}); err != nil {
+		t.Fatalf("next month is allowed: %v", err)
+	}
+	if _, err := f.fees.Generate(ctx, w.p, fees.GenerateInput{Month: thisMonth().AddDate(-3, 0, 0), DryRun: true}); err != nil {
+		t.Fatalf("a past month is allowed (it simply has no billable students here): %v", err)
+	}
+}
+
+// REQ-FEE-004: the review list can show who is a new admission (an exception to look at) without
+// storing a flag: it is worked out from the student's first enrolment when the challan is read.
+func TestREQ_FEE_004_NewAdmissionShowsOnTheReviewList(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	w := newFeeWorld(t, f, "chal-exc")
+	w.setLine(t, f, "tuition", 500000, "monthly", "2020-01-01")
+	old := w.addStudent(t, f, "Older Khan")
+	// Older Khan joined three months ago; Ali (the world's student) joined this month.
+	if _, err := f.admin.Exec(ctx, `UPDATE enrolments SET started_on = $3 WHERE tenant_id = $1 AND student_id = $2`, w.tenantID, old, thisMonth().AddDate(0, -3, 0)); err != nil {
+		t.Fatal(err)
+	}
+	res := w.generate(t, f, thisMonth(), false)
+	newID, oldID := itemFor(t, res, w.studentID).ChallanID, itemFor(t, res, old).ChallanID
+
+	page, err := f.fees.ListChallans(ctx, w.p, fees.ChallanFilter{Status: "draft"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	flags := map[string]bool{}
+	for _, c := range page.Items {
+		flags[c.ID] = c.NewAdmission
+	}
+	if !flags[newID] || flags[oldID] || len(flags) != 2 {
+		t.Fatalf("list flags: %v (new %s, old %s)", flags, newID, oldID)
+	}
+	if c, _ := f.fees.GetChallan(ctx, w.p, newID); !c.NewAdmission {
+		t.Fatal("get: a new admission must be flagged")
+	}
+	// Last month's challan for the older student is not a new admission month for them either.
+	prev := w.generate(t, f, thisMonth().AddDate(0, -3, 0), false)
+	if c, _ := f.fees.GetChallan(ctx, w.p, itemFor(t, prev, old).ChallanID); !c.NewAdmission {
+		t.Fatal("the month of the first enrolment is the new-admission month")
 	}
 }

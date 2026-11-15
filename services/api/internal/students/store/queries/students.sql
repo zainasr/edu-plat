@@ -101,3 +101,10 @@ JOIN enrolments e ON e.tenant_id = s.tenant_id AND e.student_id = s.id AND e.sta
 WHERE s.tenant_id = sqlc.arg('tenant_id') AND s.status = 'active'
   AND e.started_on <= sqlc.arg('on_or_before')::date
 ORDER BY s.registration_no, s.id;
+
+-- name: FirstEnrolmentDates :many
+-- The date each student first enrolled. Fees uses it to mark new admissions on the review list.
+SELECT student_id, min(started_on)::date AS first_started_on
+FROM enrolments
+WHERE tenant_id = sqlc.arg('tenant_id') AND student_id = ANY(sqlc.arg('student_ids')::uuid[])
+GROUP BY student_id;

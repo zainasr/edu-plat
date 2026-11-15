@@ -64,6 +64,44 @@ func (q *Queries) CloseEnrolment(ctx context.Context, arg CloseEnrolmentParams) 
 	return result.RowsAffected(), nil
 }
 
+const firstEnrolmentDates = `-- name: FirstEnrolmentDates :many
+SELECT student_id, min(started_on)::date AS first_started_on
+FROM enrolments
+WHERE tenant_id = $1 AND student_id = ANY($2::uuid[])
+GROUP BY student_id
+`
+
+type FirstEnrolmentDatesParams struct {
+	TenantID   pgtype.UUID
+	StudentIds []pgtype.UUID
+}
+
+type FirstEnrolmentDatesRow struct {
+	StudentID      pgtype.UUID
+	FirstStartedOn pgtype.Date
+}
+
+// The date each student first enrolled. Fees uses it to mark new admissions on the review list.
+func (q *Queries) FirstEnrolmentDates(ctx context.Context, arg FirstEnrolmentDatesParams) ([]FirstEnrolmentDatesRow, error) {
+	rows, err := q.db.Query(ctx, firstEnrolmentDates, arg.TenantID, arg.StudentIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []FirstEnrolmentDatesRow
+	for rows.Next() {
+		var i FirstEnrolmentDatesRow
+		if err := rows.Scan(&i.StudentID, &i.FirstStartedOn); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getStudent = `-- name: GetStudent :one
 SELECT s.id, s.registration_no, s.full_name, s.father_name, s.gender,
        s.date_of_birth, s.status, s.family_id, s.created_at, f.number AS family_number
