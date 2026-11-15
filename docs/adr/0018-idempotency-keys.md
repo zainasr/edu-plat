@@ -27,7 +27,7 @@ A replay runs before the handler, so it skips the handler's permission check. Bi
 - Wait for the first request instead of 409: friendlier, but needs advisory locks and a timeout. Rejected by the owner.
 
 ## Consequences
-- **5xx after a commit.** A 5xx or panic frees the key. If a handler ever committed money and then failed, a same-key retry would run it again. Today services commit as their last step, so this is not expected; payments should be built so that the money posting is the last step, or this decision revisited (open question for the owner).
+- **5xx after a commit.** A 5xx or panic frees the key. If a handler ever committed money and then failed, a same-key retry would run it again. Today services commit as their last step, so this is not expected; payments should be built so that the money posting is the last step, or this decision revisited (owner decision 2026-11-15: keep freeing the key on a 5xx or panic; payments must make the money posting the last step of the transaction).
 - **Crash window.** The business transaction and the stored response are separate commits. If the server dies between them, the key stays `in_progress` and retries get 409 for up to 24 hours; the client should use a new key. The business change itself happened exactly once, so no money is doubled. This is the price of keeping handlers unaware of keys.
 - **No cleanup yet.** The API role cannot delete, so expired rows stay until an admin job removes them (needs the job queue, ADR-0005). They are harmless: expired rows are taken over.
 - Responses are held in the database as bytes; the largest is a release of 200 challans.
