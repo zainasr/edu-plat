@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Education Platform API
-  version: 0.9.0
+  version: 0.10.0
   description: Source of truth for every capability (DEC-004). Edit this first, then the code.
 # Infrastructure endpoints (health) sit at the root for the load balancer.
 # Product endpoints carry their version in the path, for example /api/v1/students.
@@ -1122,7 +1122,7 @@ paths:
         without it): a retry after a lost response must never take the money twice. The amount is split across
         the family's released challans oldest first (by due date), unless `allocations` names how; either way the
         parts add up to the amount. A payment above what the family owes is refused with
-        `payments.exceeds_dues` (advance comes later). The payment posts debit Cash in Hand or Bank, credit Fee
+        `payments.exceeds_dues` unless `hold_excess_as_advance` is set; the extra is then held as Advance. The payment posts debit Cash in Hand or Bank, credit Fee
         Receivable, in the same transaction, and gets the next gapless receipt number of the fiscal year
         (July to June, named by the starting year): `RCP-2026-000001`. One payment is one receipt, with a line per
         child.
@@ -1255,6 +1255,75 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/payments/{paymentId}/refund:
+    post:
+      operationId: refundAdvance
+      tags: [payments]
+      summary: Pay back advance that has not been applied
+      description: |
+        Requires `fee.refund`. Takes money out of the unapplied advance of one payment (DEC-010: money that
+        cannot be applied must be refunded explicitly): debit Advance Fees Received, credit Cash in Hand or
+        Bank, in the same transaction. A refund cannot exceed what is still held, and cannot be undone here.
+        Audited with the reason. A payment whose advance has been applied or refunded can no longer be voided.
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdvanceRefundCreate" }
+      responses:
+        "200":
+          description: The payment, with the refund listed and its advance updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Payment" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/KeyReused" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/defaulters:
+    get:
+      operationId: listDefaulters
+      tags: [payments]
+      summary: Families that are 30 or more days overdue (configurable), most overdue first
+      description: |
+        Requires `fee.view`. A family appears when it has a released challan with a balance whose due date is at
+        least `min_days` days ago (default 30, REQ-FEE-041). Each entry has the overdue total, the oldest due
+        date, the overdue challans, and the fee payer's name and mobile for the call list (REQ-FEE-042). Nothing
+        is stored: it is worked out from the challans and payments as they stand.
+      parameters:
+        - name: min_days
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 365, default: 30 }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: cursor
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: A page of defaulting families
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DefaulterPage" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "500": { $ref: "#/components/responses/InternalError" }
 
 components:
@@ -2124,6 +2193,13 @@ components:
           type: string
           maxLength: 100
           description: A cheque number, bank slip or transfer reference.
+        hold_excess_as_advance:
+          type: boolean
+          default: false
+          description: |
+            Without this, a payment above what the family owes is refused (`payments.exceeds_dues`), so a typing
+            slip cannot silently park money. With it, the extra is held as Advance and applied to the family's
+            next challans when they are released (DEC-010).
         allocations:
           type: array
           description: Optional. How to split the amount across challans; must add up to the amount. Default is oldest first.
@@ -2147,13 +2223,17 @@ components:
 
     Payment:
       type: object
-      required: [id, receipt_no, fiscal_year, family_id, amount, method, account_code, received_on, status, allocations, entry_id, created_at]
+      required: [id, receipt_no, fiscal_year, family_id, amount, advance, advance_applied, advance_refunded, advance_available, method, account_code, received_on, status, allocations, refunds, entry_id, created_at]
       properties:
         id: { type: string, format: uuid }
         receipt_no: { type: string, example: RCP-2026-000001 }
         fiscal_year: { type: integer, description: The year the July to June fiscal year starts., example: 2026 }
         family_id: { type: string, format: uuid }
         amount: { $ref: "#/components/schemas/Money" }
+        advance: { $ref: "#/components/schemas/Money" }
+        advance_applied: { $ref: "#/components/schemas/Money" }
+        advance_refunded: { $ref: "#/components/schemas/Money" }
+        advance_available: { $ref: "#/components/schemas/Money" }
         method: { $ref: "#/components/schemas/PaymentMethod" }
         account_code: { $ref: "#/components/schemas/PaymentAccount" }
         reference: { type: string, nullable: true }
@@ -2162,6 +2242,9 @@ components:
         allocations:
           type: array
           items: { $ref: "#/components/schemas/PaymentAllocation" }
+        refunds:
+          type: array
+          items: { $ref: "#/components/schemas/AdvanceRefund" }
         entry_id: { type: string, format: uuid, description: The journal entry that booked the payment. }
         void_reason: { type: string, nullable: true }
         voided_at: { type: string, format: date-time, nullable: true }
@@ -2197,10 +2280,11 @@ components:
 
     FamilyDues:
       type: object
-      required: [family_id, total_due, items]
+      required: [family_id, total_due, advance_available, items]
       properties:
         family_id: { type: string, format: uuid }
         total_due: { $ref: "#/components/schemas/Money" }
+        advance_available: { $ref: "#/components/schemas/Money" }
         items:
           type: array
           items: { $ref: "#/components/schemas/DueItem" }
@@ -2209,3 +2293,55 @@ components:
       type: string
       description: For a released challan, how much of it has been paid. Null for drafts and voided challans.
       enum: [unpaid, partial, paid]
+
+    AdvanceRefundCreate:
+      type: object
+      required: [amount, account_code, reason]
+      properties:
+        amount: { $ref: "#/components/schemas/Money" }
+        account_code: { $ref: "#/components/schemas/PaymentAccount" }
+        reason: { type: string, minLength: 3, maxLength: 200 }
+
+    AdvanceRefund:
+      type: object
+      required: [id, amount, account_code, reason, entry_id, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        amount: { $ref: "#/components/schemas/Money" }
+        account_code: { $ref: "#/components/schemas/PaymentAccount" }
+        reason: { type: string }
+        entry_id: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+
+    FeePayer:
+      type: object
+      required: [name, mobile, relationship]
+      properties:
+        name: { type: string }
+        mobile: { type: string }
+        relationship: { type: string }
+
+    Defaulter:
+      type: object
+      required: [family_id, overdue_total, oldest_due_date, days_overdue, challans]
+      properties:
+        family_id: { type: string, format: uuid }
+        overdue_total: { $ref: "#/components/schemas/Money" }
+        oldest_due_date: { type: string, format: date }
+        days_overdue: { type: integer, description: Days since the oldest overdue challan fell due. }
+        fee_payer:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/FeePayer"
+        challans:
+          type: array
+          items: { $ref: "#/components/schemas/DueItem" }
+
+    DefaulterPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Defaulter" }
+        next_cursor: { type: string, nullable: true }

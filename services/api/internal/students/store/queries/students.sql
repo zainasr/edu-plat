@@ -113,3 +113,13 @@ GROUP BY student_id;
 SELECT id
 FROM families
 WHERE tenant_id = sqlc.arg('tenant_id') AND id = sqlc.arg('id');
+
+-- name: FamilyFeePayers :many
+-- One contact per family for the defaulters call list: the guardian marked as fee payer, else the
+-- primary guardian (REQ-FEE-008, DEC-023).
+SELECT DISTINCT ON (s.family_id) s.family_id, g.full_name, g.mobile, l.relationship
+FROM guardian_links l
+JOIN students s ON s.tenant_id = l.tenant_id AND s.id = l.student_id
+JOIN guardians g ON g.tenant_id = l.tenant_id AND g.id = l.guardian_id
+WHERE l.tenant_id = sqlc.arg('tenant_id') AND s.family_id = ANY(sqlc.arg('family_ids')::uuid[])
+ORDER BY s.family_id, l.is_fee_payer DESC, l.is_primary DESC, g.full_name;

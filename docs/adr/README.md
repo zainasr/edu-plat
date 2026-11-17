@@ -24,5 +24,6 @@ An ADR records one significant technical choice: the context, the options, the d
 | 0018 | Idempotency keys as middleware with a per-school key table | Accepted |
 | 0019 | Staff and roles management | Accepted |
 | 0020 | Payments at the counter | Accepted |
+| 0021 | Advance, refunds and defaulters | Accepted |
 
 Still to write when reached: token format and sessions, PDF renderer, observability stack, Terraform layout.

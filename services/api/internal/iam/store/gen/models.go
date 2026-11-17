@@ -19,6 +19,27 @@ type Account struct {
 	CreatedBy pgtype.UUID
 }
 
+type AdvanceApplication struct {
+	TenantID  pgtype.UUID
+	PaymentID pgtype.UUID
+	ChallanID pgtype.UUID
+	Amount    int64
+	CreatedAt pgtype.Timestamptz
+	CreatedBy pgtype.UUID
+}
+
+type AdvanceRefund struct {
+	ID             pgtype.UUID
+	TenantID       pgtype.UUID
+	PaymentID      pgtype.UUID
+	Amount         int64
+	AccountCode    string
+	Reason         string
+	JournalEntryID pgtype.UUID
+	CreatedAt      pgtype.Timestamptz
+	CreatedBy      pgtype.UUID
+}
+
 type ApiToken struct {
 	ID           pgtype.UUID
 	TenantID     pgtype.UUID
@@ -247,6 +268,7 @@ type Payment struct {
 	VoidEntryID    pgtype.UUID
 	CreatedAt      pgtype.Timestamptz
 	CreatedBy      pgtype.UUID
+	Advance        int64
 }
 
 type PaymentAllocation struct {

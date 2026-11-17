@@ -65,6 +65,77 @@ func (q *Queries) ChallanDepositTotal(ctx context.Context, arg ChallanDepositTot
 	return deposit, err
 }
 
+const defaulterFamilies = `-- name: DefaulterFamilies :many
+
+WITH open AS (
+    SELECT challans.family_id, challans.due_date,
+           (challans.total - (COALESCE((SELECT sum(a.amount) FROM payment_allocations a
+                                          JOIN payments p ON p.tenant_id = a.tenant_id AND p.id = a.payment_id AND p.status = 'recorded'
+                                         WHERE a.tenant_id = challans.tenant_id AND a.challan_id = challans.id), 0)
+                           + COALESCE((SELECT sum(x.amount) FROM advance_applications x
+                                        WHERE x.tenant_id = challans.tenant_id AND x.challan_id = challans.id), 0)))::bigint AS balance
+    FROM challans
+    WHERE challans.tenant_id = $4 AND challans.status = 'released'
+      AND challans.due_date <= $5::date
+)
+SELECT family_id, min(due_date)::date AS oldest_due, sum(balance)::bigint AS overdue_total, count(*)::int AS challan_count
+FROM open
+WHERE balance > 0
+GROUP BY family_id
+HAVING $1::date IS NULL OR (min(due_date), family_id) > ($1::date, $2::uuid)
+ORDER BY min(due_date), family_id
+LIMIT $3
+`
+
+type DefaulterFamiliesParams struct {
+	AfterDue    pgtype.Date
+	AfterFamily pgtype.UUID
+	PageLimit   int32
+	TenantID    pgtype.UUID
+	Cutoff      pgtype.Date
+}
+
+type DefaulterFamiliesRow struct {
+	FamilyID     pgtype.UUID
+	OldestDue    pgtype.Date
+	OverdueTotal int64
+	ChallanCount int32
+}
+
+// ---- defaulters -----------------------------------------------------------------------
+// Families with a released challan that fell due on or before the cutoff and still has a balance, most
+// overdue first. Keyset on (oldest due date, family id).
+func (q *Queries) DefaulterFamilies(ctx context.Context, arg DefaulterFamiliesParams) ([]DefaulterFamiliesRow, error) {
+	rows, err := q.db.Query(ctx, defaulterFamilies,
+		arg.AfterDue,
+		arg.AfterFamily,
+		arg.PageLimit,
+		arg.TenantID,
+		arg.Cutoff,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []DefaulterFamiliesRow
+	for rows.Next() {
+		var i DefaulterFamiliesRow
+		if err := rows.Scan(
+			&i.FamilyID,
+			&i.OldestDue,
+			&i.OverdueTotal,
+			&i.ChallanCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const ensureDefaultFeeTypes = `-- name: EnsureDefaultFeeTypes :exec
 INSERT INTO fee_types (tenant_id, code, name, kind, is_deposit)
 SELECT $1::uuid, v.code, v.name, v.kind, v.is_deposit
@@ -87,11 +158,62 @@ func (q *Queries) EnsureDefaultFeeTypes(ctx context.Context, tenantID pgtype.UUI
 	return err
 }
 
+const familyAdvanceBalances = `-- name: FamilyAdvanceBalances :many
+SELECT payments.id, payments.receipt_no, payments.fiscal_year,
+       (payments.advance
+         - COALESCE((SELECT sum(x.amount) FROM advance_applications x WHERE x.tenant_id = payments.tenant_id AND x.payment_id = payments.id), 0)
+         - COALESCE((SELECT sum(r.amount) FROM advance_refunds r WHERE r.tenant_id = payments.tenant_id AND r.payment_id = payments.id), 0))::bigint AS remaining
+FROM payments
+WHERE payments.tenant_id = $1 AND payments.family_id = $2
+  AND payments.status = 'recorded' AND payments.advance > 0
+ORDER BY payments.created_at, payments.id
+`
+
+type FamilyAdvanceBalancesParams struct {
+	TenantID pgtype.UUID
+	FamilyID pgtype.UUID
+}
+
+type FamilyAdvanceBalancesRow struct {
+	ID         pgtype.UUID
+	ReceiptNo  int64
+	FiscalYear int32
+	Remaining  int64
+}
+
+// What each of a family's payments still holds as advance, oldest payment first.
+func (q *Queries) FamilyAdvanceBalances(ctx context.Context, arg FamilyAdvanceBalancesParams) ([]FamilyAdvanceBalancesRow, error) {
+	rows, err := q.db.Query(ctx, familyAdvanceBalances, arg.TenantID, arg.FamilyID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []FamilyAdvanceBalancesRow
+	for rows.Next() {
+		var i FamilyAdvanceBalancesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ReceiptNo,
+			&i.FiscalYear,
+			&i.Remaining,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const familyChallanBalances = `-- name: FamilyChallanBalances :many
 SELECT challans.id, student_id, due_date, challan_no, month, total,
-       COALESCE((SELECT sum(a.amount) FROM payment_allocations a
-                JOIN payments p ON p.tenant_id = a.tenant_id AND p.id = a.payment_id AND p.status = 'recorded'
-                WHERE a.tenant_id = challans.tenant_id AND a.challan_id = challans.id), 0)::bigint AS paid
+       (COALESCE((SELECT sum(a.amount) FROM payment_allocations a
+                 JOIN payments p ON p.tenant_id = a.tenant_id AND p.id = a.payment_id AND p.status = 'recorded'
+                 WHERE a.tenant_id = challans.tenant_id AND a.challan_id = challans.id), 0)
+        + COALESCE((SELECT sum(x.amount) FROM advance_applications x
+                    WHERE x.tenant_id = challans.tenant_id AND x.challan_id = challans.id), 0))::bigint AS paid
 FROM challans
 WHERE challans.tenant_id = $1 AND challans.family_id = $2 AND challans.status = 'released'
   AND ($3::uuid[] IS NULL OR challans.id = ANY($3::uuid[]))
@@ -185,9 +307,11 @@ func (q *Queries) FirstVersionMonths(ctx context.Context, arg FirstVersionMonths
 const getChallan = `-- name: GetChallan :one
 SELECT id, student_id, family_id, month, due_date, status, total, challan_no, consumer_no,
        released_at, void_reason, created_at,
-       COALESCE((SELECT sum(a.amount) FROM payment_allocations a
-                JOIN payments p ON p.tenant_id = a.tenant_id AND p.id = a.payment_id AND p.status = 'recorded'
-                WHERE a.tenant_id = challans.tenant_id AND a.challan_id = challans.id), 0)::bigint AS paid
+       (COALESCE((SELECT sum(a.amount) FROM payment_allocations a
+                 JOIN payments p ON p.tenant_id = a.tenant_id AND p.id = a.payment_id AND p.status = 'recorded'
+                 WHERE a.tenant_id = challans.tenant_id AND a.challan_id = challans.id), 0)
+        + COALESCE((SELECT sum(x.amount) FROM advance_applications x
+                    WHERE x.tenant_id = challans.tenant_id AND x.challan_id = challans.id), 0))::bigint AS paid
 FROM challans
 WHERE challans.tenant_id = $1 AND challans.id = $2
 `
@@ -269,10 +393,13 @@ func (q *Queries) GetFeeType(ctx context.Context, arg GetFeeTypeParams) (GetFeeT
 }
 
 const getPayment = `-- name: GetPayment :one
-SELECT id, family_id, fiscal_year, receipt_no, amount, method, account_code, reference, received_on, status,
+SELECT id, family_id, fiscal_year, receipt_no, amount, advance,
+       COALESCE((SELECT sum(x.amount) FROM advance_applications x WHERE x.tenant_id = payments.tenant_id AND x.payment_id = payments.id), 0)::bigint AS advance_applied,
+       COALESCE((SELECT sum(r.amount) FROM advance_refunds r WHERE r.tenant_id = payments.tenant_id AND r.payment_id = payments.id), 0)::bigint AS advance_refunded,
+       method, account_code, reference, received_on, status,
        journal_entry_id, void_reason, voided_at, created_at
 FROM payments
-WHERE tenant_id = $1 AND id = $2
+WHERE payments.tenant_id = $1 AND payments.id = $2
 `
 
 type GetPaymentParams struct {
@@ -281,20 +408,23 @@ type GetPaymentParams struct {
 }
 
 type GetPaymentRow struct {
-	ID             pgtype.UUID
-	FamilyID       pgtype.UUID
-	FiscalYear     int32
-	ReceiptNo      int64
-	Amount         int64
-	Method         string
-	AccountCode    string
-	Reference      pgtype.Text
-	ReceivedOn     pgtype.Date
-	Status         string
-	JournalEntryID pgtype.UUID
-	VoidReason     pgtype.Text
-	VoidedAt       pgtype.Timestamptz
-	CreatedAt      pgtype.Timestamptz
+	ID              pgtype.UUID
+	FamilyID        pgtype.UUID
+	FiscalYear      int32
+	ReceiptNo       int64
+	Amount          int64
+	Advance         int64
+	AdvanceApplied  int64
+	AdvanceRefunded int64
+	Method          string
+	AccountCode     string
+	Reference       pgtype.Text
+	ReceivedOn      pgtype.Date
+	Status          string
+	JournalEntryID  pgtype.UUID
+	VoidReason      pgtype.Text
+	VoidedAt        pgtype.Timestamptz
+	CreatedAt       pgtype.Timestamptz
 }
 
 func (q *Queries) GetPayment(ctx context.Context, arg GetPaymentParams) (GetPaymentRow, error) {
@@ -306,6 +436,9 @@ func (q *Queries) GetPayment(ctx context.Context, arg GetPaymentParams) (GetPaym
 		&i.FiscalYear,
 		&i.ReceiptNo,
 		&i.Amount,
+		&i.Advance,
+		&i.AdvanceApplied,
+		&i.AdvanceRefunded,
 		&i.Method,
 		&i.AccountCode,
 		&i.Reference,
@@ -317,6 +450,62 @@ func (q *Queries) GetPayment(ctx context.Context, arg GetPaymentParams) (GetPaym
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const insertAdvanceApplication = `-- name: InsertAdvanceApplication :exec
+INSERT INTO advance_applications (tenant_id, payment_id, challan_id, amount, created_by)
+VALUES ($1, $2, $3, $4, $5)
+`
+
+type InsertAdvanceApplicationParams struct {
+	TenantID  pgtype.UUID
+	PaymentID pgtype.UUID
+	ChallanID pgtype.UUID
+	Amount    int64
+	CreatedBy pgtype.UUID
+}
+
+func (q *Queries) InsertAdvanceApplication(ctx context.Context, arg InsertAdvanceApplicationParams) error {
+	_, err := q.db.Exec(ctx, insertAdvanceApplication,
+		arg.TenantID,
+		arg.PaymentID,
+		arg.ChallanID,
+		arg.Amount,
+		arg.CreatedBy,
+	)
+	return err
+}
+
+const insertAdvanceRefund = `-- name: InsertAdvanceRefund :one
+INSERT INTO advance_refunds (tenant_id, payment_id, amount, account_code, reason, journal_entry_id, created_by)
+VALUES ($1, $2, $3, $4,
+        $5, $6, $7)
+RETURNING id
+`
+
+type InsertAdvanceRefundParams struct {
+	TenantID       pgtype.UUID
+	PaymentID      pgtype.UUID
+	Amount         int64
+	AccountCode    string
+	Reason         string
+	JournalEntryID pgtype.UUID
+	CreatedBy      pgtype.UUID
+}
+
+func (q *Queries) InsertAdvanceRefund(ctx context.Context, arg InsertAdvanceRefundParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, insertAdvanceRefund,
+		arg.TenantID,
+		arg.PaymentID,
+		arg.Amount,
+		arg.AccountCode,
+		arg.Reason,
+		arg.JournalEntryID,
+		arg.CreatedBy,
+	)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
 }
 
 const insertAllocation = `-- name: InsertAllocation :exec
@@ -492,11 +681,11 @@ func (q *Queries) InsertOverride(ctx context.Context, arg InsertOverrideParams) 
 }
 
 const insertPayment = `-- name: InsertPayment :exec
-INSERT INTO payments (id, tenant_id, family_id, fiscal_year, receipt_no, amount, method, account_code,
+INSERT INTO payments (id, tenant_id, family_id, fiscal_year, receipt_no, amount, advance, method, account_code,
                       reference, received_on, journal_entry_id, created_by)
 VALUES ($1, $2, $3, $4, $5,
-        $6, $7, $8, $9,
-        $10, $11, $12)
+        $6, $7, $8, $9, $10,
+        $11, $12, $13)
 `
 
 type InsertPaymentParams struct {
@@ -506,6 +695,7 @@ type InsertPaymentParams struct {
 	FiscalYear     int32
 	ReceiptNo      int64
 	Amount         int64
+	Advance        int64
 	Method         string
 	AccountCode    string
 	Reference      pgtype.Text
@@ -522,6 +712,7 @@ func (q *Queries) InsertPayment(ctx context.Context, arg InsertPaymentParams) er
 		arg.FiscalYear,
 		arg.ReceiptNo,
 		arg.Amount,
+		arg.Advance,
 		arg.Method,
 		arg.AccountCode,
 		arg.Reference,
@@ -666,9 +857,11 @@ func (q *Queries) ListChallanLines(ctx context.Context, arg ListChallanLinesPara
 const listChallansPage = `-- name: ListChallansPage :many
 SELECT id, student_id, family_id, month, due_date, status, total, challan_no, consumer_no,
        released_at, void_reason, created_at,
-       COALESCE((SELECT sum(a.amount) FROM payment_allocations a
-                JOIN payments p ON p.tenant_id = a.tenant_id AND p.id = a.payment_id AND p.status = 'recorded'
-                WHERE a.tenant_id = challans.tenant_id AND a.challan_id = challans.id), 0)::bigint AS paid
+       (COALESCE((SELECT sum(a.amount) FROM payment_allocations a
+                 JOIN payments p ON p.tenant_id = a.tenant_id AND p.id = a.payment_id AND p.status = 'recorded'
+                 WHERE a.tenant_id = challans.tenant_id AND a.challan_id = challans.id), 0)
+        + COALESCE((SELECT sum(x.amount) FROM advance_applications x
+                    WHERE x.tenant_id = challans.tenant_id AND x.challan_id = challans.id), 0))::bigint AS paid
 FROM challans
 WHERE challans.tenant_id = $1
   AND ($2::date IS NULL OR challans.month = $2::date)
@@ -844,15 +1037,18 @@ func (q *Queries) ListOverridesForStudent(ctx context.Context, arg ListOverrides
 }
 
 const listPaymentsPage = `-- name: ListPaymentsPage :many
-SELECT id, family_id, fiscal_year, receipt_no, amount, method, account_code, reference, received_on, status,
+SELECT id, family_id, fiscal_year, receipt_no, amount, advance,
+       COALESCE((SELECT sum(x.amount) FROM advance_applications x WHERE x.tenant_id = payments.tenant_id AND x.payment_id = payments.id), 0)::bigint AS advance_applied,
+       COALESCE((SELECT sum(r.amount) FROM advance_refunds r WHERE r.tenant_id = payments.tenant_id AND r.payment_id = payments.id), 0)::bigint AS advance_refunded,
+       method, account_code, reference, received_on, status,
        journal_entry_id, void_reason, voided_at, created_at
 FROM payments
-WHERE tenant_id = $1
-  AND ($2::uuid IS NULL OR family_id = $2::uuid)
-  AND ($3::text IS NULL OR status = $3::text)
+WHERE payments.tenant_id = $1
+  AND ($2::uuid IS NULL OR payments.family_id = $2::uuid)
+  AND ($3::text IS NULL OR payments.status = $3::text)
   AND ($4::timestamptz IS NULL
-       OR (created_at, id) < ($4::timestamptz, $5::uuid))
-ORDER BY created_at DESC, id DESC
+       OR (payments.created_at, payments.id) < ($4::timestamptz, $5::uuid))
+ORDER BY payments.created_at DESC, payments.id DESC
 LIMIT $6
 `
 
@@ -866,20 +1062,23 @@ type ListPaymentsPageParams struct {
 }
 
 type ListPaymentsPageRow struct {
-	ID             pgtype.UUID
-	FamilyID       pgtype.UUID
-	FiscalYear     int32
-	ReceiptNo      int64
-	Amount         int64
-	Method         string
-	AccountCode    string
-	Reference      pgtype.Text
-	ReceivedOn     pgtype.Date
-	Status         string
-	JournalEntryID pgtype.UUID
-	VoidReason     pgtype.Text
-	VoidedAt       pgtype.Timestamptz
-	CreatedAt      pgtype.Timestamptz
+	ID              pgtype.UUID
+	FamilyID        pgtype.UUID
+	FiscalYear      int32
+	ReceiptNo       int64
+	Amount          int64
+	Advance         int64
+	AdvanceApplied  int64
+	AdvanceRefunded int64
+	Method          string
+	AccountCode     string
+	Reference       pgtype.Text
+	ReceivedOn      pgtype.Date
+	Status          string
+	JournalEntryID  pgtype.UUID
+	VoidReason      pgtype.Text
+	VoidedAt        pgtype.Timestamptz
+	CreatedAt       pgtype.Timestamptz
 }
 
 // Keyset pagination on (created_at, id), newest first.
@@ -905,6 +1104,9 @@ func (q *Queries) ListPaymentsPage(ctx context.Context, arg ListPaymentsPagePara
 			&i.FiscalYear,
 			&i.ReceiptNo,
 			&i.Amount,
+			&i.Advance,
+			&i.AdvanceApplied,
+			&i.AdvanceRefunded,
 			&i.Method,
 			&i.AccountCode,
 			&i.Reference,
@@ -977,6 +1179,56 @@ func (q *Queries) ListPlanVersions(ctx context.Context, arg ListPlanVersionsPara
 	return items, nil
 }
 
+const listRefundsForPayments = `-- name: ListRefundsForPayments :many
+SELECT id, payment_id, amount, account_code, reason, journal_entry_id, created_at
+FROM advance_refunds
+WHERE tenant_id = $1 AND payment_id = ANY($2::uuid[])
+ORDER BY payment_id, created_at, id
+`
+
+type ListRefundsForPaymentsParams struct {
+	TenantID   pgtype.UUID
+	PaymentIds []pgtype.UUID
+}
+
+type ListRefundsForPaymentsRow struct {
+	ID             pgtype.UUID
+	PaymentID      pgtype.UUID
+	Amount         int64
+	AccountCode    string
+	Reason         string
+	JournalEntryID pgtype.UUID
+	CreatedAt      pgtype.Timestamptz
+}
+
+func (q *Queries) ListRefundsForPayments(ctx context.Context, arg ListRefundsForPaymentsParams) ([]ListRefundsForPaymentsRow, error) {
+	rows, err := q.db.Query(ctx, listRefundsForPayments, arg.TenantID, arg.PaymentIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListRefundsForPaymentsRow
+	for rows.Next() {
+		var i ListRefundsForPaymentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.PaymentID,
+			&i.Amount,
+			&i.AccountCode,
+			&i.Reason,
+			&i.JournalEntryID,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const liveChallanStudents = `-- name: LiveChallanStudents :many
 SELECT student_id
 FROM challans
@@ -1010,7 +1262,7 @@ func (q *Queries) LiveChallanStudents(ctx context.Context, arg LiveChallanStuden
 }
 
 const lockChallan = `-- name: LockChallan :one
-SELECT id, status
+SELECT id, status, family_id
 FROM challans
 WHERE tenant_id = $1 AND id = $2
 FOR UPDATE
@@ -1022,16 +1274,55 @@ type LockChallanParams struct {
 }
 
 type LockChallanRow struct {
-	ID     pgtype.UUID
-	Status string
+	ID       pgtype.UUID
+	Status   string
+	FamilyID pgtype.UUID
 }
 
 // Takes the row lock, so two releases of the same challan run one after the other.
 func (q *Queries) LockChallan(ctx context.Context, arg LockChallanParams) (LockChallanRow, error) {
 	row := q.db.QueryRow(ctx, lockChallan, arg.TenantID, arg.ID)
 	var i LockChallanRow
-	err := row.Scan(&i.ID, &i.Status)
+	err := row.Scan(&i.ID, &i.Status, &i.FamilyID)
 	return i, err
+}
+
+const lockFamilyAdvancePayments = `-- name: LockFamilyAdvancePayments :many
+
+SELECT id
+FROM payments
+WHERE tenant_id = $1 AND family_id = ANY($2::uuid[])
+  AND status = 'recorded' AND advance > 0
+ORDER BY family_id, created_at, id
+FOR UPDATE
+`
+
+type LockFamilyAdvancePaymentsParams struct {
+	TenantID  pgtype.UUID
+	FamilyIds []pgtype.UUID
+}
+
+// ---- advance and refunds (slice 5b) ---------------------------------------------------
+// Locks the payments of these families that hold advance, before any counter is taken, so applying
+// advance at release cannot interleave with a refund or a void of the same payment.
+func (q *Queries) LockFamilyAdvancePayments(ctx context.Context, arg LockFamilyAdvancePaymentsParams) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, lockFamilyAdvancePayments, arg.TenantID, arg.FamilyIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []pgtype.UUID
+	for rows.Next() {
+		var id pgtype.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const lockFamilyChallans = `-- name: LockFamilyChallans :many
@@ -1130,6 +1421,65 @@ func (q *Queries) NextReceiptNo(ctx context.Context, arg NextReceiptNoParams) (i
 	var value int64
 	err := row.Scan(&value)
 	return value, err
+}
+
+const overdueChallansForFamilies = `-- name: OverdueChallansForFamilies :many
+SELECT challans.id, challans.family_id, challans.student_id, challans.challan_no, challans.month, challans.due_date, challans.total,
+       (COALESCE((SELECT sum(a.amount) FROM payment_allocations a
+                    JOIN payments p ON p.tenant_id = a.tenant_id AND p.id = a.payment_id AND p.status = 'recorded'
+                   WHERE a.tenant_id = challans.tenant_id AND a.challan_id = challans.id), 0)
+        + COALESCE((SELECT sum(x.amount) FROM advance_applications x
+                     WHERE x.tenant_id = challans.tenant_id AND x.challan_id = challans.id), 0))::bigint AS paid
+FROM challans
+WHERE challans.tenant_id = $1 AND challans.status = 'released'
+  AND challans.family_id = ANY($2::uuid[]) AND challans.due_date <= $3::date
+ORDER BY challans.family_id, challans.due_date, challans.challan_no, challans.id
+`
+
+type OverdueChallansForFamiliesParams struct {
+	TenantID  pgtype.UUID
+	FamilyIds []pgtype.UUID
+	Cutoff    pgtype.Date
+}
+
+type OverdueChallansForFamiliesRow struct {
+	ID        pgtype.UUID
+	FamilyID  pgtype.UUID
+	StudentID pgtype.UUID
+	ChallanNo pgtype.Int8
+	Month     pgtype.Date
+	DueDate   pgtype.Date
+	Total     int64
+	Paid      int64
+}
+
+func (q *Queries) OverdueChallansForFamilies(ctx context.Context, arg OverdueChallansForFamiliesParams) ([]OverdueChallansForFamiliesRow, error) {
+	rows, err := q.db.Query(ctx, overdueChallansForFamilies, arg.TenantID, arg.FamilyIds, arg.Cutoff)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []OverdueChallansForFamiliesRow
+	for rows.Next() {
+		var i OverdueChallansForFamiliesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.FamilyID,
+			&i.StudentID,
+			&i.ChallanNo,
+			&i.Month,
+			&i.DueDate,
+			&i.Total,
+			&i.Paid,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const releaseChallan = `-- name: ReleaseChallan :one

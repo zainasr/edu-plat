@@ -82,6 +82,54 @@ func (q *Queries) FamilyExists(ctx context.Context, arg FamilyExistsParams) (pgt
 	return id, err
 }
 
+const familyFeePayers = `-- name: FamilyFeePayers :many
+SELECT DISTINCT ON (s.family_id) s.family_id, g.full_name, g.mobile, l.relationship
+FROM guardian_links l
+JOIN students s ON s.tenant_id = l.tenant_id AND s.id = l.student_id
+JOIN guardians g ON g.tenant_id = l.tenant_id AND g.id = l.guardian_id
+WHERE l.tenant_id = $1 AND s.family_id = ANY($2::uuid[])
+ORDER BY s.family_id, l.is_fee_payer DESC, l.is_primary DESC, g.full_name
+`
+
+type FamilyFeePayersParams struct {
+	TenantID  pgtype.UUID
+	FamilyIds []pgtype.UUID
+}
+
+type FamilyFeePayersRow struct {
+	FamilyID     pgtype.UUID
+	FullName     string
+	Mobile       string
+	Relationship string
+}
+
+// One contact per family for the defaulters call list: the guardian marked as fee payer, else the
+// primary guardian (REQ-FEE-008, DEC-023).
+func (q *Queries) FamilyFeePayers(ctx context.Context, arg FamilyFeePayersParams) ([]FamilyFeePayersRow, error) {
+	rows, err := q.db.Query(ctx, familyFeePayers, arg.TenantID, arg.FamilyIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []FamilyFeePayersRow
+	for rows.Next() {
+		var i FamilyFeePayersRow
+		if err := rows.Scan(
+			&i.FamilyID,
+			&i.FullName,
+			&i.Mobile,
+			&i.Relationship,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const firstEnrolmentDates = `-- name: FirstEnrolmentDates :many
 SELECT student_id, min(started_on)::date AS first_started_on
 FROM enrolments

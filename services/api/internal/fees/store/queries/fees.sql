@@ -94,15 +94,17 @@ VALUES (sqlc.arg('tenant_id'), sqlc.arg('challan_id'), sqlc.arg('line_no'), sqlc
 -- name: GetChallan :one
 SELECT id, student_id, family_id, month, due_date, status, total, challan_no, consumer_no,
        released_at, void_reason, created_at,
-       COALESCE((SELECT sum(a.amount) FROM payment_allocations a
-                JOIN payments p ON p.tenant_id = a.tenant_id AND p.id = a.payment_id AND p.status = 'recorded'
-                WHERE a.tenant_id = challans.tenant_id AND a.challan_id = challans.id), 0)::bigint AS paid
+       (COALESCE((SELECT sum(a.amount) FROM payment_allocations a
+                 JOIN payments p ON p.tenant_id = a.tenant_id AND p.id = a.payment_id AND p.status = 'recorded'
+                 WHERE a.tenant_id = challans.tenant_id AND a.challan_id = challans.id), 0)
+        + COALESCE((SELECT sum(x.amount) FROM advance_applications x
+                    WHERE x.tenant_id = challans.tenant_id AND x.challan_id = challans.id), 0))::bigint AS paid
 FROM challans
 WHERE challans.tenant_id = sqlc.arg('tenant_id') AND challans.id = sqlc.arg('id');
 
 -- name: LockChallan :one
 -- Takes the row lock, so two releases of the same challan run one after the other.
-SELECT id, status
+SELECT id, status, family_id
 FROM challans
 WHERE tenant_id = sqlc.arg('tenant_id') AND id = sqlc.arg('id')
 FOR UPDATE;
@@ -111,9 +113,11 @@ FOR UPDATE;
 -- Keyset pagination on (created_at, id), newest first. A NULL cursor or filter means "no condition".
 SELECT id, student_id, family_id, month, due_date, status, total, challan_no, consumer_no,
        released_at, void_reason, created_at,
-       COALESCE((SELECT sum(a.amount) FROM payment_allocations a
-                JOIN payments p ON p.tenant_id = a.tenant_id AND p.id = a.payment_id AND p.status = 'recorded'
-                WHERE a.tenant_id = challans.tenant_id AND a.challan_id = challans.id), 0)::bigint AS paid
+       (COALESCE((SELECT sum(a.amount) FROM payment_allocations a
+                 JOIN payments p ON p.tenant_id = a.tenant_id AND p.id = a.payment_id AND p.status = 'recorded'
+                 WHERE a.tenant_id = challans.tenant_id AND a.challan_id = challans.id), 0)
+        + COALESCE((SELECT sum(x.amount) FROM advance_applications x
+                    WHERE x.tenant_id = challans.tenant_id AND x.challan_id = challans.id), 0))::bigint AS paid
 FROM challans
 WHERE challans.tenant_id = sqlc.arg('tenant_id')
   AND (sqlc.narg('month')::date IS NULL OR challans.month = sqlc.narg('month')::date)
@@ -179,19 +183,21 @@ FOR UPDATE;
 -- Released challans of a family with what has been paid on each by payments that stand, in the order a
 -- payment pays them: oldest due date first.
 SELECT challans.id, student_id, due_date, challan_no, month, total,
-       COALESCE((SELECT sum(a.amount) FROM payment_allocations a
-                JOIN payments p ON p.tenant_id = a.tenant_id AND p.id = a.payment_id AND p.status = 'recorded'
-                WHERE a.tenant_id = challans.tenant_id AND a.challan_id = challans.id), 0)::bigint AS paid
+       (COALESCE((SELECT sum(a.amount) FROM payment_allocations a
+                 JOIN payments p ON p.tenant_id = a.tenant_id AND p.id = a.payment_id AND p.status = 'recorded'
+                 WHERE a.tenant_id = challans.tenant_id AND a.challan_id = challans.id), 0)
+        + COALESCE((SELECT sum(x.amount) FROM advance_applications x
+                    WHERE x.tenant_id = challans.tenant_id AND x.challan_id = challans.id), 0))::bigint AS paid
 FROM challans
 WHERE challans.tenant_id = sqlc.arg('tenant_id') AND challans.family_id = sqlc.arg('family_id') AND challans.status = 'released'
   AND (sqlc.narg('only_ids')::uuid[] IS NULL OR challans.id = ANY(sqlc.narg('only_ids')::uuid[]))
 ORDER BY challans.due_date, challans.challan_no, challans.id;
 
 -- name: InsertPayment :exec
-INSERT INTO payments (id, tenant_id, family_id, fiscal_year, receipt_no, amount, method, account_code,
+INSERT INTO payments (id, tenant_id, family_id, fiscal_year, receipt_no, amount, advance, method, account_code,
                       reference, received_on, journal_entry_id, created_by)
 VALUES (sqlc.arg('id'), sqlc.arg('tenant_id'), sqlc.arg('family_id'), sqlc.arg('fiscal_year'), sqlc.arg('receipt_no'),
-        sqlc.arg('amount'), sqlc.arg('method'), sqlc.arg('account_code'), sqlc.narg('reference'),
+        sqlc.arg('amount'), sqlc.arg('advance'), sqlc.arg('method'), sqlc.arg('account_code'), sqlc.narg('reference'),
         sqlc.arg('received_on'), sqlc.arg('journal_entry_id'), sqlc.arg('created_by'));
 
 -- name: InsertAllocation :exec
@@ -199,10 +205,13 @@ INSERT INTO payment_allocations (tenant_id, payment_id, challan_id, amount)
 VALUES (sqlc.arg('tenant_id'), sqlc.arg('payment_id'), sqlc.arg('challan_id'), sqlc.arg('amount'));
 
 -- name: GetPayment :one
-SELECT id, family_id, fiscal_year, receipt_no, amount, method, account_code, reference, received_on, status,
+SELECT id, family_id, fiscal_year, receipt_no, amount, advance,
+       COALESCE((SELECT sum(x.amount) FROM advance_applications x WHERE x.tenant_id = payments.tenant_id AND x.payment_id = payments.id), 0)::bigint AS advance_applied,
+       COALESCE((SELECT sum(r.amount) FROM advance_refunds r WHERE r.tenant_id = payments.tenant_id AND r.payment_id = payments.id), 0)::bigint AS advance_refunded,
+       method, account_code, reference, received_on, status,
        journal_entry_id, void_reason, voided_at, created_at
 FROM payments
-WHERE tenant_id = sqlc.arg('tenant_id') AND id = sqlc.arg('id');
+WHERE payments.tenant_id = sqlc.arg('tenant_id') AND payments.id = sqlc.arg('id');
 
 -- name: LockPayment :one
 SELECT id, status, journal_entry_id
@@ -212,15 +221,18 @@ FOR UPDATE;
 
 -- name: ListPaymentsPage :many
 -- Keyset pagination on (created_at, id), newest first.
-SELECT id, family_id, fiscal_year, receipt_no, amount, method, account_code, reference, received_on, status,
+SELECT id, family_id, fiscal_year, receipt_no, amount, advance,
+       COALESCE((SELECT sum(x.amount) FROM advance_applications x WHERE x.tenant_id = payments.tenant_id AND x.payment_id = payments.id), 0)::bigint AS advance_applied,
+       COALESCE((SELECT sum(r.amount) FROM advance_refunds r WHERE r.tenant_id = payments.tenant_id AND r.payment_id = payments.id), 0)::bigint AS advance_refunded,
+       method, account_code, reference, received_on, status,
        journal_entry_id, void_reason, voided_at, created_at
 FROM payments
-WHERE tenant_id = sqlc.arg('tenant_id')
-  AND (sqlc.narg('family_id')::uuid IS NULL OR family_id = sqlc.narg('family_id')::uuid)
-  AND (sqlc.narg('status')::text IS NULL OR status = sqlc.narg('status')::text)
+WHERE payments.tenant_id = sqlc.arg('tenant_id')
+  AND (sqlc.narg('family_id')::uuid IS NULL OR payments.family_id = sqlc.narg('family_id')::uuid)
+  AND (sqlc.narg('status')::text IS NULL OR payments.status = sqlc.narg('status')::text)
   AND (sqlc.narg('after_created_at')::timestamptz IS NULL
-       OR (created_at, id) < (sqlc.narg('after_created_at')::timestamptz, sqlc.narg('after_id')::uuid))
-ORDER BY created_at DESC, id DESC
+       OR (payments.created_at, payments.id) < (sqlc.narg('after_created_at')::timestamptz, sqlc.narg('after_id')::uuid))
+ORDER BY payments.created_at DESC, payments.id DESC
 LIMIT sqlc.arg('page_limit');
 
 -- name: ListAllocationsForPayments :many
@@ -236,3 +248,78 @@ UPDATE payments
 SET status = 'voided', void_reason = sqlc.arg('reason'), voided_at = now(), voided_by = sqlc.arg('voided_by'),
     void_entry_id = sqlc.arg('void_entry_id')
 WHERE tenant_id = sqlc.arg('tenant_id') AND id = sqlc.arg('id') AND status = 'recorded';
+
+-- ---- advance and refunds (slice 5b) ---------------------------------------------------
+
+-- name: LockFamilyAdvancePayments :many
+-- Locks the payments of these families that hold advance, before any counter is taken, so applying
+-- advance at release cannot interleave with a refund or a void of the same payment.
+SELECT id
+FROM payments
+WHERE tenant_id = sqlc.arg('tenant_id') AND family_id = ANY(sqlc.arg('family_ids')::uuid[])
+  AND status = 'recorded' AND advance > 0
+ORDER BY family_id, created_at, id
+FOR UPDATE;
+
+-- name: FamilyAdvanceBalances :many
+-- What each of a family's payments still holds as advance, oldest payment first.
+SELECT payments.id, payments.receipt_no, payments.fiscal_year,
+       (payments.advance
+         - COALESCE((SELECT sum(x.amount) FROM advance_applications x WHERE x.tenant_id = payments.tenant_id AND x.payment_id = payments.id), 0)
+         - COALESCE((SELECT sum(r.amount) FROM advance_refunds r WHERE r.tenant_id = payments.tenant_id AND r.payment_id = payments.id), 0))::bigint AS remaining
+FROM payments
+WHERE payments.tenant_id = sqlc.arg('tenant_id') AND payments.family_id = sqlc.arg('family_id')
+  AND payments.status = 'recorded' AND payments.advance > 0
+ORDER BY payments.created_at, payments.id;
+
+-- name: InsertAdvanceApplication :exec
+INSERT INTO advance_applications (tenant_id, payment_id, challan_id, amount, created_by)
+VALUES (sqlc.arg('tenant_id'), sqlc.arg('payment_id'), sqlc.arg('challan_id'), sqlc.arg('amount'), sqlc.arg('created_by'));
+
+-- name: InsertAdvanceRefund :one
+INSERT INTO advance_refunds (tenant_id, payment_id, amount, account_code, reason, journal_entry_id, created_by)
+VALUES (sqlc.arg('tenant_id'), sqlc.arg('payment_id'), sqlc.arg('amount'), sqlc.arg('account_code'),
+        sqlc.arg('reason'), sqlc.arg('journal_entry_id'), sqlc.arg('created_by'))
+RETURNING id;
+
+-- name: ListRefundsForPayments :many
+SELECT id, payment_id, amount, account_code, reason, journal_entry_id, created_at
+FROM advance_refunds
+WHERE tenant_id = sqlc.arg('tenant_id') AND payment_id = ANY(sqlc.arg('payment_ids')::uuid[])
+ORDER BY payment_id, created_at, id;
+
+-- ---- defaulters -----------------------------------------------------------------------
+
+-- name: DefaulterFamilies :many
+-- Families with a released challan that fell due on or before the cutoff and still has a balance, most
+-- overdue first. Keyset on (oldest due date, family id).
+WITH open AS (
+    SELECT challans.family_id, challans.due_date,
+           (challans.total - (COALESCE((SELECT sum(a.amount) FROM payment_allocations a
+                                          JOIN payments p ON p.tenant_id = a.tenant_id AND p.id = a.payment_id AND p.status = 'recorded'
+                                         WHERE a.tenant_id = challans.tenant_id AND a.challan_id = challans.id), 0)
+                           + COALESCE((SELECT sum(x.amount) FROM advance_applications x
+                                        WHERE x.tenant_id = challans.tenant_id AND x.challan_id = challans.id), 0)))::bigint AS balance
+    FROM challans
+    WHERE challans.tenant_id = sqlc.arg('tenant_id') AND challans.status = 'released'
+      AND challans.due_date <= sqlc.arg('cutoff')::date
+)
+SELECT family_id, min(due_date)::date AS oldest_due, sum(balance)::bigint AS overdue_total, count(*)::int AS challan_count
+FROM open
+WHERE balance > 0
+GROUP BY family_id
+HAVING sqlc.narg('after_due')::date IS NULL OR (min(due_date), family_id) > (sqlc.narg('after_due')::date, sqlc.narg('after_family')::uuid)
+ORDER BY min(due_date), family_id
+LIMIT sqlc.arg('page_limit');
+
+-- name: OverdueChallansForFamilies :many
+SELECT challans.id, challans.family_id, challans.student_id, challans.challan_no, challans.month, challans.due_date, challans.total,
+       (COALESCE((SELECT sum(a.amount) FROM payment_allocations a
+                    JOIN payments p ON p.tenant_id = a.tenant_id AND p.id = a.payment_id AND p.status = 'recorded'
+                   WHERE a.tenant_id = challans.tenant_id AND a.challan_id = challans.id), 0)
+        + COALESCE((SELECT sum(x.amount) FROM advance_applications x
+                     WHERE x.tenant_id = challans.tenant_id AND x.challan_id = challans.id), 0))::bigint AS paid
+FROM challans
+WHERE challans.tenant_id = sqlc.arg('tenant_id') AND challans.status = 'released'
+  AND challans.family_id = ANY(sqlc.arg('family_ids')::uuid[]) AND challans.due_date <= sqlc.arg('cutoff')::date
+ORDER BY challans.family_id, challans.due_date, challans.challan_no, challans.id;

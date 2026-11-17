@@ -15,6 +15,10 @@ import (
 // Payment rules: pure functions, no database and no clock (ADR-0020).
 
 const (
+	accountAdvance       = "2000" // Advance Fees Received: a liability held for the family (DEC-010)
+	defaultDefaulterDays = 30
+	maxDefaulterDays     = 365
+
 	receiptPrefix    = "RCP"
 	maxReference     = 100
 	minPayVoidReason = 3
@@ -34,6 +38,9 @@ type PaymentInput struct {
 	ReceivedOn  time.Time // zero means today
 	Reference   string
 	Allocations []Allocation // optional; default is oldest first
+	// HoldExcessAsAdvance asks for anything the challans cannot take to be held as Advance; without it a
+	// payment above what the family owes is refused.
+	HoldExcessAsAdvance bool
 }
 
 // Allocation is part of a payment applied to one challan.
@@ -102,9 +109,11 @@ func validatePayment(in PaymentInput, today time.Time) (PaymentInput, error) {
 
 // allocate splits a payment across a family's challans. By default the oldest due date is paid first
 // (ties by challan number); with explicit allocations the cashier's split is checked instead. Either
-// way the parts add up to the amount and no challan is paid beyond what it owes. A payment above what
-// the family owes is refused (advance is a later slice).
-func allocate(amount money.Money, balances []Balance, explicit []Allocation) ([]Allocation, error) {
+// way no challan is paid beyond what it owes. What the challans cannot take is Advance, held for the
+// family's next challans, but only when the caller asked for it (holdExcess): otherwise a payment above
+// what is owed is refused, so a typing slip cannot silently park money (owner decision 2026-11-17).
+// It returns the allocations and the advance; allocations plus advance equal the amount.
+func allocate(amount money.Money, balances []Balance, explicit []Allocation, holdExcess bool) ([]Allocation, money.Money, error) {
 	open := make([]Balance, 0, len(balances))
 	var owed money.Money
 	for _, b := range balances {
@@ -112,13 +121,6 @@ func allocate(amount money.Money, balances []Balance, explicit []Allocation) ([]
 			open = append(open, b)
 			owed += b.Owed()
 		}
-	}
-	if len(open) == 0 {
-		return nil, apperr.Conflict("payments.no_dues", "This family owes nothing right now, so there is nothing to pay.")
-	}
-	if amount > owed {
-		return nil, apperr.Conflict("payments.exceeds_dues",
-			fmt.Sprintf("The family owes %s, which is less than this payment. Take no more than what is owed.", owed))
 	}
 
 	if len(explicit) > 0 {
@@ -132,21 +134,35 @@ func allocate(amount money.Money, balances []Balance, explicit []Allocation) ([]
 			b, ok := byID[a.ChallanID]
 			switch {
 			case !ok:
-				return nil, allocationInvalid("A line names a challan that is not an open challan of this family.")
+				return nil, 0, allocationInvalid("A line names a challan that is not an open challan of this family.")
 			case seen[a.ChallanID]:
-				return nil, allocationInvalid("Each challan may appear once.")
+				return nil, 0, allocationInvalid("Each challan may appear once.")
 			case !a.Amount.IsPositive():
-				return nil, allocationInvalid("Each line must be more than zero.")
+				return nil, 0, allocationInvalid("Each line must be more than zero.")
 			case a.Amount > b.Owed():
-				return nil, allocationInvalid("A line is more than its challan still owes.")
+				return nil, 0, allocationInvalid("A line is more than its challan still owes.")
 			}
 			seen[a.ChallanID] = true
 			sum += a.Amount
 		}
-		if sum != amount {
-			return nil, allocationInvalid("The lines must add up to the payment amount.")
+		switch {
+		case sum > amount:
+			return nil, 0, allocationInvalid("The lines add up to more than the payment.")
+		case sum < amount && !holdExcess:
+			return nil, 0, allocationInvalid("The lines must add up to the payment amount, or ask to hold the rest as advance.")
 		}
-		return append([]Allocation(nil), explicit...), nil
+		return append([]Allocation(nil), explicit...), amount - sum, nil
+	}
+
+	if len(open) == 0 {
+		if holdExcess {
+			return nil, amount, nil // nothing owed yet: the whole payment is advance against the next challan
+		}
+		return nil, 0, apperr.Conflict("payments.no_dues", "This family owes nothing right now, so there is nothing to pay.")
+	}
+	if amount > owed && !holdExcess {
+		return nil, 0, apperr.Conflict("payments.exceeds_dues",
+			fmt.Sprintf("The family owes %s, which is less than this payment. Take no more than what is owed, or ask to hold the extra as advance.", owed))
 	}
 
 	sort.Slice(open, func(i, j int) bool {
@@ -171,26 +187,150 @@ func allocate(amount money.Money, balances []Balance, explicit []Allocation) ([]
 		out = append(out, Allocation{ChallanID: b.ChallanID, Amount: take})
 		left -= take
 	}
-	return out, nil
+	return out, left, nil
 }
 
 func allocationInvalid(msg string) error {
 	return apperr.Validation("payments.allocation_invalid", msg, apperr.Field{Field: "allocations", Message: msg})
 }
 
-// paymentEntry is the journal entry a payment posts: the money arrives in Cash or Bank (debit) and the
-// family's receivable falls (credit Fee Receivable) (BR-FEE-008).
-func paymentEntry(paymentID, receipt, account string, amount money.Money, on time.Time) ledger.Entry {
+// paymentEntry is the journal entry a payment posts: the money arrives in Cash or Bank (debit); the
+// family's receivable falls by what pays challans (credit Fee Receivable); anything held as advance is a
+// liability to the family (credit Advance Fees Received) (BR-FEE-008, DEC-010).
+func paymentEntry(paymentID, receipt, account string, amount, advance money.Money, on time.Time) ledger.Entry {
+	lines := []ledger.Line{{AccountCode: account, Debit: amount}}
+	if paid := amount - advance; paid > 0 {
+		lines = append(lines, ledger.Line{AccountCode: accountFeeReceivable, Credit: paid})
+	}
+	if advance > 0 {
+		lines = append(lines, ledger.Line{AccountCode: accountAdvance, Credit: advance})
+	}
 	return ledger.Entry{
 		OccurredOn: on,
 		Memo:       "Payment " + receipt,
 		SourceType: "payment.recorded",
 		SourceID:   paymentID,
+		Lines:      lines,
+	}
+}
+
+// AdvanceBalance is what one payment still holds as advance.
+type AdvanceBalance struct {
+	PaymentID string
+	Remaining money.Money
+}
+
+// AdvanceUse is part of one payment's advance applied to a challan.
+type AdvanceUse struct {
+	PaymentID string
+	Amount    money.Money
+}
+
+// applyAdvance spends a family's advance on a newly released challan: oldest payment first, never more
+// than the challan owes and never more than a payment still holds. held must be in the order to use it.
+func applyAdvance(owed money.Money, held []AdvanceBalance) []AdvanceUse {
+	var out []AdvanceUse
+	left := owed
+	for _, h := range held {
+		if left <= 0 {
+			break
+		}
+		if h.Remaining <= 0 {
+			continue
+		}
+		take := h.Remaining
+		if take > left {
+			take = left
+		}
+		out = append(out, AdvanceUse{PaymentID: h.PaymentID, Amount: take})
+		left -= take
+	}
+	return out
+}
+
+// advanceAppliedEntry moves advance from a liability to the receivable it pays: debit Advance Fees
+// Received, credit Fee Receivable.
+func advanceAppliedEntry(challanID string, challanNo int64, amount money.Money, on time.Time) ledger.Entry {
+	return ledger.Entry{
+		OccurredOn: on,
+		Memo:       fmt.Sprintf("Advance applied to challan %d", challanNo),
+		SourceType: "advance.applied",
+		SourceID:   challanID,
 		Lines: []ledger.Line{
-			{AccountCode: account, Debit: amount},
+			{AccountCode: accountAdvance, Debit: amount},
 			{AccountCode: accountFeeReceivable, Credit: amount},
 		},
 	}
+}
+
+// advanceRefundEntry pays advance back to the family: debit Advance Fees Received, credit Cash or Bank.
+func advanceRefundEntry(paymentID, receipt, account string, amount money.Money, on time.Time) ledger.Entry {
+	return ledger.Entry{
+		OccurredOn: on,
+		Memo:       "Advance refund for " + receipt,
+		SourceType: "advance.refunded",
+		SourceID:   paymentID,
+		Lines: []ledger.Line{
+			{AccountCode: accountAdvance, Debit: amount},
+			{AccountCode: account, Credit: amount},
+		},
+	}
+}
+
+// RefundInput is a request to pay back advance.
+type RefundInput struct {
+	Amount      money.Money
+	AccountCode string
+	Reason      string
+}
+
+func validateRefund(in RefundInput) (RefundInput, error) {
+	var f fieldErrors
+	if !in.Amount.IsPositive() {
+		f.add("amount", "Must be more than zero.")
+	}
+	if in.AccountCode != accountCash && in.AccountCode != accountBank {
+		f.add("account_code", "Choose the account the money is paid from: 1000 (Cash in Hand) or 1100 (Bank).")
+	}
+	in.Reason = strings.TrimSpace(in.Reason)
+	if len(in.Reason) < minPayVoidReason || len(in.Reason) > maxPayVoidReason {
+		f.add("reason", "3 to 200 characters.")
+	}
+	return in, f.err("payments.refund_invalid")
+}
+
+// refundAllowed refuses to pay back more than the payment still holds as advance.
+func refundAllowed(remaining, amount money.Money) error {
+	if amount > remaining {
+		return apperr.Conflict("payments.refund_exceeds_advance",
+			fmt.Sprintf("Only %s of advance is still held on this payment.", remaining))
+	}
+	return nil
+}
+
+// validateMinDays picks the defaulter window: 30 days unless given, 1 to 365 (REQ-FEE-041).
+func validateMinDays(v int, absent bool) (int, error) {
+	if absent {
+		return defaultDefaulterDays, nil
+	}
+	if v < 1 || v > maxDefaulterDays {
+		var f fieldErrors
+		f.add("min_days", "Between 1 and 365.")
+		return 0, f.err("defaulters.invalid")
+	}
+	return v, nil
+}
+
+// overdueCutoff is the latest due date that counts as minDays overdue today.
+func overdueCutoff(today time.Time, minDays int) time.Time {
+	t := time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, time.UTC)
+	return t.AddDate(0, 0, -minDays)
+}
+
+func daysOverdue(today, due time.Time) int {
+	t := time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, time.UTC)
+	d := time.Date(due.Year(), due.Month(), due.Day(), 0, 0, 0, 0, time.UTC)
+	return int(t.Sub(d).Hours() / 24)
 }
 
 // paymentProgress says how much of a released challan is paid. Drafts and voided challans have none.
