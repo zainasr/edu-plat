@@ -255,7 +255,7 @@ func TestINV_EveryOperationRequiresAuthAndAPermission(t *testing.T) {
 	f := newFixture(t)
 	slug, mobile, tenantID := newTenant(t, f, "inv-authz")
 	session := signIn(t, f, mobile, slug)
-	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger, f.fees), f.iam)
+	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger, f.fees, f.attendance), f.iam)
 	// The session stays valid but holds no permission once every role is removed.
 	if _, err := f.admin.Exec(ctx, `DELETE FROM role_assignments WHERE tenant_id = $1`, tenantID); err != nil {
 		t.Fatal(err)

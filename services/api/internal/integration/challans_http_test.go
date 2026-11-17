@@ -15,7 +15,7 @@ func TestREQ_API_ChallanFlowOverHTTP(t *testing.T) {
 	f := newFixture(t)
 	w := newFeeWorld(t, f, "chal-http")
 	token := signInAs(t, f, w)
-	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger, f.fees), f.iam)
+	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger, f.fees, f.attendance), f.iam)
 	w.setLine(t, f, "tuition", 500000, "monthly", "2026-01-01")
 	month := thisMonth().Format("2006-01-02")
 

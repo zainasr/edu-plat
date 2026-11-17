@@ -19,7 +19,7 @@ func TestREQ_API_LedgerEndpointsRequireAuthAndPermission(t *testing.T) {
 	ctx := context.Background()
 	slug, mobile, tenantID := newTenant(t, f, "led-authz")
 	session := signIn(t, f, mobile, slug)
-	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger, f.fees), f.iam)
+	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger, f.fees, f.attendance), f.iam)
 	if _, err := f.admin.Exec(ctx, `DELETE FROM role_assignments WHERE tenant_id = $1`, tenantID); err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +50,7 @@ func TestREQ_API_LedgerReadsOverHTTP(t *testing.T) {
 	slug, mobile, _ := newTenant(t, f, "led-http")
 	p := principalFor(t, f, slug, mobile)
 	token := signIn(t, f, mobile, slug)
-	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger, f.fees), f.iam)
+	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger, f.fees, f.attendance), f.iam)
 
 	// A school that has never posted has no accounts and an empty, balanced trial balance.
 	rec := do(t, h, http.MethodGet, "/api/v1/accounts", token, "")
@@ -147,7 +147,7 @@ func TestREQ_API_LedgerEntryOfAnotherTenantIs404(t *testing.T) {
 	slugB, mobileB, _ := newTenant(t, f, "led-hb")
 	pA := principalFor(t, f, slugA, mobileA)
 	tokenB := signIn(t, f, mobileB, slugB)
-	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger, f.fees), f.iam)
+	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger, f.fees, f.attendance), f.iam)
 	entry := mustPost(t, f, pA, billing(100, "2026-11-07", t))
 
 	if rec := do(t, h, http.MethodGet, "/api/v1/journal-entries/"+entry.ID, tokenB, ""); rec.Code != http.StatusNotFound {
@@ -163,7 +163,7 @@ func TestADR_0014_NoHTTPRouteCanPostOrChangeMoney(t *testing.T) {
 	slug, mobile, tenantID := newTenant(t, f, "led-nowrite")
 	p := principalFor(t, f, slug, mobile)
 	token := signIn(t, f, mobile, slug)
-	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger, f.fees), f.iam)
+	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger, f.fees, f.attendance), f.iam)
 	entry := mustPost(t, f, p, billing(100, "2026-11-07", t))
 
 	body := `{"memo":"sneaky","source_type":"x","occurred_on":"2026-11-07","lines":[]}`

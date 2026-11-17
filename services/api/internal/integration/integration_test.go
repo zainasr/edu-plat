@@ -15,6 +15,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/zainasr/edu-plat/services/api/internal/attendance"
 	"github.com/zainasr/edu-plat/services/api/internal/fees"
 	"github.com/zainasr/edu-plat/services/api/internal/iam"
 	"github.com/zainasr/edu-plat/services/api/internal/ledger"
@@ -70,14 +71,15 @@ func newMobile(t *testing.T) string {
 }
 
 type fixture struct {
-	app      *pgxpool.Pool
-	admin    *pgxpool.Pool
-	sender   *captureSender
-	iam      *iam.Service
-	org      *org.Service
-	students *students.Service
-	ledger   *ledger.Service
-	fees     *fees.Service
+	app        *pgxpool.Pool
+	admin      *pgxpool.Pool
+	sender     *captureSender
+	iam        *iam.Service
+	org        *org.Service
+	students   *students.Service
+	ledger     *ledger.Service
+	fees       *fees.Service
+	attendance *attendance.Service
 }
 
 // newTenant creates a tenant with one owner through the real bootstrap path.
@@ -132,14 +134,15 @@ func newFixture(t *testing.T) *fixture {
 	structure := org.NewService(app)
 	enrolment := students.NewService(app, structure)
 	return &fixture{
-		app:      app,
-		admin:    admin,
-		sender:   sender,
-		iam:      iam.NewService(app, sender, secret),
-		org:      structure,
-		students: enrolment,
-		ledger:   ledger.NewService(app),
-		fees:     fees.NewService(app, structure, enrolment, ledger.NewService(app)),
+		app:        app,
+		admin:      admin,
+		sender:     sender,
+		iam:        iam.NewService(app, sender, secret),
+		org:        structure,
+		students:   enrolment,
+		ledger:     ledger.NewService(app),
+		fees:       fees.NewService(app, structure, enrolment, ledger.NewService(app)),
+		attendance: attendance.NewService(app, structure, enrolment),
 	}
 }
 

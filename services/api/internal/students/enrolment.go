@@ -429,3 +429,90 @@ func (s *Service) FamilyFeePayers(ctx context.Context, tx pgx.Tx, tenantID strin
 	}
 	return out, nil
 }
+
+// RosterEntry is a student on a section's roster.
+type RosterEntry struct {
+	StudentID      string
+	RegistrationNo string
+	FullName       string
+}
+
+// SectionRoster lists the active students enrolled in a section on a date, for the attendance register,
+// inside the caller's open tenant transaction.
+func (s *Service) SectionRoster(ctx context.Context, tx pgx.Tx, tenantID, sectionID string, on time.Time) ([]RosterEntry, error) {
+	tenant, err := db.ParseUUID(tenantID)
+	if err != nil {
+		return nil, err
+	}
+	section, err := db.ParseUUID(sectionID)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := gen.New(tx).SectionRoster(ctx, gen.SectionRosterParams{
+		TenantID: tenant, SectionID: section, OnDay: pgtype.Date{Time: on, Valid: true},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("section roster: %w", err)
+	}
+	out := make([]RosterEntry, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, RosterEntry{StudentID: db.UUIDString(r.ID), RegistrationNo: r.RegistrationNo, FullName: r.FullName})
+	}
+	return out, nil
+}
+
+// StudentBrief is the registration number and name of a student.
+type StudentBrief struct {
+	RegistrationNo string
+	FullName       string
+}
+
+// StudentBriefs returns the registration number and name of each given student, keyed by id.
+func (s *Service) StudentBriefs(ctx context.Context, tx pgx.Tx, tenantID string, ids []string) (map[string]StudentBrief, error) {
+	tenant, err := db.ParseUUID(tenantID)
+	if err != nil {
+		return nil, err
+	}
+	parsed := make([]pgtype.UUID, 0, len(ids))
+	for _, id := range ids {
+		u, err := db.ParseUUID(id)
+		if err != nil {
+			return nil, err
+		}
+		parsed = append(parsed, u)
+	}
+	rows, err := gen.New(tx).StudentBriefs(ctx, gen.StudentBriefsParams{TenantID: tenant, Ids: parsed})
+	if err != nil {
+		return nil, fmt.Errorf("student briefs: %w", err)
+	}
+	out := make(map[string]StudentBrief, len(rows))
+	for _, r := range rows {
+		out[db.UUIDString(r.ID)] = StudentBrief{RegistrationNo: r.RegistrationNo, FullName: r.FullName}
+	}
+	return out, nil
+}
+
+// PrimaryContacts returns one guardian per student to call (the primary guardian, else the fee payer).
+func (s *Service) PrimaryContacts(ctx context.Context, tx pgx.Tx, tenantID string, studentIDs []string) (map[string]FeePayer, error) {
+	tenant, err := db.ParseUUID(tenantID)
+	if err != nil {
+		return nil, err
+	}
+	parsed := make([]pgtype.UUID, 0, len(studentIDs))
+	for _, id := range studentIDs {
+		u, err := db.ParseUUID(id)
+		if err != nil {
+			return nil, err
+		}
+		parsed = append(parsed, u)
+	}
+	rows, err := gen.New(tx).PrimaryContacts(ctx, gen.PrimaryContactsParams{TenantID: tenant, StudentIds: parsed})
+	if err != nil {
+		return nil, fmt.Errorf("primary contacts: %w", err)
+	}
+	out := make(map[string]FeePayer, len(rows))
+	for _, r := range rows {
+		out[db.UUIDString(r.StudentID)] = FeePayer{Name: r.FullName, Mobile: r.Mobile, Relationship: r.Relationship}
+	}
+	return out, nil
+}

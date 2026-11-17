@@ -19,7 +19,7 @@ func TestREQ_API_FeeEndpointsRequireAuthAndPermission(t *testing.T) {
 	ctx := context.Background()
 	slug, mobile, tenantID := newTenant(t, f, "fee-authz")
 	session := signIn(t, f, mobile, slug)
-	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger, f.fees), f.iam)
+	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger, f.fees, f.attendance), f.iam)
 	if _, err := f.admin.Exec(ctx, `DELETE FROM role_assignments WHERE tenant_id = $1`, tenantID); err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +57,7 @@ func TestREQ_API_FeeSetupFlowOverHTTP(t *testing.T) {
 	f := newFixture(t)
 	w := newFeeWorld(t, f, "fee-http")
 	token := signInAs(t, f, w)
-	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger, f.fees), f.iam)
+	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger, f.fees, f.attendance), f.iam)
 	tuition := w.types["tuition"]
 
 	// 1. The suggested types are there.
@@ -163,7 +163,7 @@ func TestREQ_API_FeeMoneyInputIsChecked(t *testing.T) {
 	f := newFixture(t)
 	w := newFeeWorld(t, f, "fee-money")
 	token := signInAs(t, f, w)
-	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger, f.fees), f.iam)
+	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger, f.fees, f.attendance), f.iam)
 	path := "/api/v1/fee-plans/" + w.classID + "/lines"
 	typeID := w.types["tuition"]
 
@@ -208,7 +208,7 @@ func TestREQ_API_FeeSetupOfAnotherTenantIs404(t *testing.T) {
 	a := newFeeWorld(t, f, "fee-ha")
 	b := newFeeWorld(t, f, "fee-hb")
 	tokenB := signInAs(t, f, b)
-	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger, f.fees), f.iam)
+	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger, f.fees, f.attendance), f.iam)
 
 	for _, path := range []string{
 		"/api/v1/fee-plans/" + a.classID,

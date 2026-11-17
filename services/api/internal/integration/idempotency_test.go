@@ -50,7 +50,7 @@ func TestREQ_API_010_ReleaseRetryReplaysTheOriginalResponse(t *testing.T) {
 	f := newFixture(t)
 	w := newFeeWorld(t, f, "idem-rel")
 	token := signInAs(t, f, w)
-	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger, f.fees), f.iam, api.WithIdempotency(f.app))
+	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger, f.fees, f.attendance), f.iam, api.WithIdempotency(f.app))
 	w.setLine(t, f, "tuition", 500000, "monthly", "2020-01-01")
 	id := itemFor(t, w.generate(t, f, thisMonth(), false), w.studentID).ChallanID
 	body := `{"challan_ids":["` + id + `"]}`
@@ -82,7 +82,7 @@ func TestREQ_API_010_KeyReuseIsRefused(t *testing.T) {
 	f := newFixture(t)
 	w := newFeeWorld(t, f, "idem-reuse")
 	token := signInAs(t, f, w)
-	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger, f.fees), f.iam, api.WithIdempotency(f.app))
+	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger, f.fees, f.attendance), f.iam, api.WithIdempotency(f.app))
 	w.setLine(t, f, "tuition", 500000, "monthly", "2020-01-01")
 	month := thisMonth().Format("2006-01-02")
 	const key = "shared-key-12345678"
@@ -110,7 +110,7 @@ func TestREQ_API_010_ConcurrentRetriesRunOnce(t *testing.T) {
 	f := newFixture(t)
 	w := newFeeWorld(t, f, "idem-race")
 	token := signInAs(t, f, w)
-	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger, f.fees), f.iam, api.WithIdempotency(f.app))
+	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger, f.fees, f.attendance), f.iam, api.WithIdempotency(f.app))
 	w.setLine(t, f, "tuition", 500000, "monthly", "2020-01-01")
 	id := itemFor(t, w.generate(t, f, thisMonth(), false), w.studentID).ChallanID
 	body := `{"challan_ids":["` + id + `"]}`
@@ -159,7 +159,7 @@ func TestREQ_API_010_InProgressAndExpiredKeys(t *testing.T) {
 	ctx := context.Background()
 	w := newFeeWorld(t, f, "idem-prog")
 	token := signInAs(t, f, w)
-	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger, f.fees), f.iam, api.WithIdempotency(f.app))
+	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger, f.fees, f.attendance), f.iam, api.WithIdempotency(f.app))
 	w.setLine(t, f, "tuition", 500000, "monthly", "2020-01-01")
 	id := itemFor(t, w.generate(t, f, thisMonth(), false), w.studentID).ChallanID
 	body := `{"challan_ids":["` + id + `"]}`
@@ -194,7 +194,7 @@ func TestREQ_API_010_KeyValidationAndPassThrough(t *testing.T) {
 	f := newFixture(t)
 	w := newFeeWorld(t, f, "idem-val")
 	token := signInAs(t, f, w)
-	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger, f.fees), f.iam, api.WithIdempotency(f.app))
+	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger, f.fees, f.attendance), f.iam, api.WithIdempotency(f.app))
 	body := `{"month":"` + thisMonth().Format("2006-01-02") + `","dry_run":true}`
 
 	if rec := keyed(t, h, "/api/v1/challans/generate", token, "short", body); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "idempotency.key_invalid") {
@@ -309,7 +309,7 @@ func TestREQ_API_010_AKeyBelongsToOneUser(t *testing.T) {
 	owner := signInAs(t, f, w)
 	accountant := addStaff(t, f, w.tenantID, w.slug, "accountant")
 	receptionist := addStaff(t, f, w.tenantID, w.slug, "receptionist")
-	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger, f.fees), f.iam, api.WithIdempotency(f.app))
+	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger, f.fees, f.attendance), f.iam, api.WithIdempotency(f.app))
 	w.setLine(t, f, "tuition", 500000, "monthly", "2020-01-01")
 	id := itemFor(t, w.generate(t, f, thisMonth(), false), w.studentID).ChallanID
 	body := `{"challan_ids":["` + id + `"]}`
@@ -343,7 +343,7 @@ func TestREQ_API_010_SameKeyOnTwoChallansIsRefused(t *testing.T) {
 	ctx := context.Background()
 	w := newFeeWorld(t, f, "idem-void")
 	token := signInAs(t, f, w)
-	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger, f.fees), f.iam, api.WithIdempotency(f.app))
+	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger, f.fees, f.attendance), f.iam, api.WithIdempotency(f.app))
 	w.setLine(t, f, "tuition", 500000, "monthly", "2020-01-01")
 	second := w.addStudent(t, f, "Sara Khan")
 	res := w.generate(t, f, thisMonth(), false)

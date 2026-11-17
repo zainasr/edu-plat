@@ -175,7 +175,7 @@ func TestUS_IAM_005_DeactivationEndsAccessAtOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger, f.fees), f.iam)
+	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger, f.fees, f.attendance), f.iam)
 	if rec := do(t, h, http.MethodGet, "/api/v1/fee-types", session, ""); rec.Code != http.StatusOK {
 		t.Fatalf("before: %d %s", rec.Code, rec.Body)
 	}
@@ -379,7 +379,7 @@ func TestREQ_IAM_006_RoleAssignmentHistoryIsProtected(t *testing.T) {
 func TestREQ_API_StaffOverHTTP(t *testing.T) {
 	f := newFixture(t)
 	w := newStaffWorld(t, f, "staff-http")
-	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger, f.fees), f.iam, api.WithIdempotency(f.app))
+	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger, f.fees, f.attendance), f.iam, api.WithIdempotency(f.app))
 
 	if rec := do(t, h, http.MethodGet, "/api/v1/roles", w.token, ""); rec.Code != http.StatusOK ||
 		!strings.Contains(rec.Body.String(), `"accountant"`) || !strings.Contains(rec.Body.String(), `"fee.release"`) {
@@ -427,7 +427,7 @@ func TestUS_IAM_005_ADeactivatedMembershipIsRefusedEvenWithALiveToken(t *testing
 	if live == 0 {
 		t.Fatal("this test needs a live token")
 	}
-	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger, f.fees), f.iam)
+	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger, f.fees, f.attendance), f.iam)
 	if rec := do(t, h, http.MethodGet, "/api/v1/fee-types", token, ""); rec.Code != http.StatusUnauthorized {
 		t.Fatalf("a live token of a deactivated membership: %d %s", rec.Code, rec.Body)
 	}
@@ -509,7 +509,7 @@ func TestREQ_IAM_006_RevokingTheLastRoleSwitchesThemOff(t *testing.T) {
 	w := newStaffWorld(t, f, "staff-lastrole")
 	m, mobile := w.add(t, f, "One Role", "accountant")
 	_, token := w.principal(t, f, mobile)
-	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger, f.fees), f.iam)
+	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger, f.fees, f.attendance), f.iam)
 
 	out, err := f.iam.RevokeRole(ctx, w.owner, m.ID, "accountant")
 	if err != nil || out.Status != "deactivated" || len(out.Roles) != 0 {

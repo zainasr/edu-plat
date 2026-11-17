@@ -16,7 +16,7 @@ func TestREQ_API_PaymentsOverHTTP(t *testing.T) {
 	f := newFixture(t)
 	w := newPayWorld(t, f, "pay-http")
 	token := signInAs(t, f, w.feeWorld)
-	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger, f.fees), f.iam, api.WithIdempotency(f.app))
+	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger, f.fees, f.attendance), f.iam, api.WithIdempotency(f.app))
 
 	body := `{"family_id":"` + w.familyID + `","amount":{"amount":200000,"currency":"PKR"},"method":"cash","account_code":"1000","reference":"slip 9"}`
 
@@ -85,7 +85,7 @@ func TestREQ_API_AdvanceRefundAndDefaultersOverHTTP(t *testing.T) {
 	f := newFixture(t)
 	w := newPayWorld(t, f, "adv-http")
 	token := signInAs(t, f, w.feeWorld)
-	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger, f.fees), f.iam, api.WithIdempotency(f.app))
+	h := api.Handler(api.NewServer(f.iam, f.org, f.students, f.ledger, f.fees, f.attendance), f.iam, api.WithIdempotency(f.app))
 	body := func(amount int, extra string) string {
 		return `{"family_id":"` + w.familyID + `","amount":{"amount":` + itoaInt(amount) + `,"currency":"PKR"},"method":"cash","account_code":"1000"` + extra + `}`
 	}

@@ -31,6 +31,14 @@ const (
 	PermPaymentVoid   = "payment.void"
 	PermFeeRefund     = "fee.refund"
 
+	PermCalendarManage       = "calendar.manage"
+	PermAttendanceView       = "attendance.view"
+	PermAttendanceMark       = "attendance.mark"
+	PermAttendanceEditWindow = "attendance.edit_within_window"
+	PermAttendanceEditAny    = "attendance.edit_any"
+	PermAttendanceSettings   = "attendance.settings"
+	PermAttendanceContacts   = "attendance.contacts"
+
 	PermUserView   = "user.view"
 	PermUserManage = "user.manage"
 	PermRoleManage = "role.manage"
@@ -45,6 +53,7 @@ var rolePermissions = map[string][]string{
 		PermLedgerView, PermReportFinanceView,
 		PermFeeView, PermFeePlanManage, PermFeeSettings, PermFeeGenerate, PermFeeRelease,
 		PermFeeCollect, PermPaymentVoid, PermFeeRefund,
+		PermCalendarManage, PermAttendanceView, PermAttendanceMark, PermAttendanceEditWindow, PermAttendanceEditAny, PermAttendanceSettings, PermAttendanceContacts,
 		PermUserView, PermUserManage, PermRoleManage,
 	},
 	// Accountant: fee.* except settings, and the accounting reads (spec 02-identity §3). Payments,
@@ -55,7 +64,15 @@ var rolePermissions = map[string][]string{
 	},
 	// Receptionist: sees students and fees and takes payments (fee.collect). The cash session arrives later.
 	"receptionist": {
-		PermStudentView, PermFeeView, PermFeeCollect,
+		PermStudentView, PermFeeView, PermFeeCollect, PermOrgView,
+		PermAttendanceView, PermAttendanceMark, PermAttendanceContacts,
+	},
+	// Attendance clerk: the attendance desk enters absentees from teachers' paper slips (US-ATT-007). Teachers
+	// marking their own sections come with the staff module's section assignments.
+	// The clerk can also correct a submitted register within the correction window (every correction keeps
+	// the old value, who and why); anything older needs attendance.edit_any, held by the owner.
+	"attendance_clerk": {
+		PermStudentView, PermOrgView, PermAttendanceView, PermAttendanceMark, PermAttendanceEditWindow, PermAttendanceContacts,
 	},
 }
 
@@ -114,4 +131,19 @@ func Require(ctx context.Context, permission string) (Principal, error) {
 		return Principal{}, apperr.Forbidden("auth.permission_denied", "Your token does not allow this action ("+permission+").")
 	}
 	return p, nil
+}
+
+// RequireAny is like Require for an endpoint that two permissions can open (for example correcting
+// attendance within a window, or at any age). The service then decides what the caller may do.
+func RequireAny(ctx context.Context, permissions ...string) (Principal, error) {
+	p, ok := From(ctx)
+	if !ok {
+		return Principal{}, apperr.Unauthenticated("auth.required", "Sign in or send a token to use this endpoint.")
+	}
+	for _, perm := range permissions {
+		if p.Can(perm) {
+			return p, nil
+		}
+	}
+	return Principal{}, apperr.Forbidden("auth.permission_denied", "Your token does not allow this action ("+permissions[0]+").")
 }

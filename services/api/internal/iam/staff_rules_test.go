@@ -120,7 +120,7 @@ func TestREQ_IAM_005_RoleCatalogue(t *testing.T) {
 			t.Fatalf("%s: permissions must be sorted and not empty: %v", r.Name, r.Permissions)
 		}
 	}
-	if !slices.Equal(names, []string{"accountant", "owner", "receptionist"}) {
+	if !slices.Equal(names, []string{"accountant", "attendance_clerk", "owner", "receptionist"}) {
 		t.Fatalf("roles: %v", names)
 	}
 	owner := cat[slices.IndexFunc(cat, func(r RoleInfo) bool { return r.Name == "owner" })]
