@@ -27,6 +27,8 @@ const (
 	PermFeeSettings   = "fee.settings"
 	PermFeeGenerate   = "fee.generate"
 	PermFeeRelease    = "fee.release"
+	PermFeeCollect    = "fee.collect"
+	PermPaymentVoid   = "payment.void"
 
 	PermUserView   = "user.view"
 	PermUserManage = "user.manage"
@@ -41,17 +43,18 @@ var rolePermissions = map[string][]string{
 		PermOrgView, PermOrgManage, PermSessionManage,
 		PermLedgerView, PermReportFinanceView,
 		PermFeeView, PermFeePlanManage, PermFeeSettings, PermFeeGenerate, PermFeeRelease,
+		PermFeeCollect, PermPaymentVoid,
 		PermUserView, PermUserManage, PermRoleManage,
 	},
 	// Accountant: fee.* except settings, and the accounting reads (spec 02-identity §3). Payments,
 	// payroll and the rest are added with the slices that build them.
 	"accountant": {
-		PermFeeView, PermFeePlanManage, PermFeeGenerate, PermFeeRelease,
+		PermFeeView, PermFeePlanManage, PermFeeGenerate, PermFeeRelease, PermFeeCollect, PermPaymentVoid,
 		PermLedgerView, PermReportFinanceView,
 	},
-	// Receptionist: sees students and fees; fee.collect and the cash session arrive with payments.
+	// Receptionist: sees students and fees and takes payments (fee.collect). The cash session arrives later.
 	"receptionist": {
-		PermStudentView, PermFeeView,
+		PermStudentView, PermFeeView, PermFeeCollect,
 	},
 }
 

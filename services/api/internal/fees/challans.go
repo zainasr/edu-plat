@@ -49,12 +49,15 @@ type Challan struct {
 	// It is worked out when the challan is read; nothing is stored.
 	NewAdmission bool
 	Total        money.Money
-	ChallanNo    *int64
-	ConsumerNo   *string
-	Lines        []ChallanLine
-	ReleasedAt   *time.Time
-	VoidReason   *string
-	CreatedAt    time.Time
+	Paid         money.Money // paid by payments that stand, worked out when read; never stored
+	// PaymentStatus is unpaid, partial or paid for a released challan, and empty for drafts and voided ones.
+	PaymentStatus string
+	ChallanNo     *int64
+	ConsumerNo    *string
+	Lines         []ChallanLine
+	ReleasedAt    *time.Time
+	VoidReason    *string
+	CreatedAt     time.Time
 }
 
 // GenerateItem is what happened (or would happen) for one student.
@@ -296,7 +299,11 @@ func (s *Service) Release(ctx context.Context, p iam.Principal, ids []string) ([
 			if err != nil {
 				return fmt.Errorf("read challan: %w", err)
 			}
-			if _, err := s.ledger.Post(ctx, tx, p, receivableEntry(id, no, money.Money(c.Total), on)); err != nil {
+			deposit, err := q.ChallanDepositTotal(ctx, gen.ChallanDepositTotalParams{TenantID: tenant, ChallanID: uid})
+			if err != nil {
+				return fmt.Errorf("deposit total: %w", err)
+			}
+			if _, err := s.ledger.Post(ctx, tx, p, receivableEntry(id, no, money.Money(c.Total), money.Money(deposit), on)); err != nil {
 				return fmt.Errorf("post receivable: %w", err)
 			}
 			if err := s.audit(ctx, tx, p, "challan.released", "challan", id,
@@ -465,6 +472,7 @@ func toChallan(r challanRow, lines []ChallanLine) Challan {
 	c := Challan{
 		ID: db.UUIDString(r.ID), StudentID: db.UUIDString(r.StudentID), FamilyID: db.UUIDString(r.FamilyID),
 		Month: r.Month.Time, DueDate: r.DueDate.Time, Status: r.Status, Total: money.Money(r.Total),
+		Paid: money.Money(r.Paid), PaymentStatus: paymentProgress(r.Status, money.Money(r.Total), money.Money(r.Paid)),
 		Lines: lines, CreatedAt: r.CreatedAt.Time,
 	}
 	if lines == nil {
@@ -555,34 +563,41 @@ func loadChallanLines(ctx context.Context, q *gen.Queries, tenant pgtype.UUID, i
 	return out, nil
 }
 
-type challanCursor struct {
+// keyset is the position of the last row on a page: (created_at, id), newest first. Clients treat the
+// encoded form as opaque.
+type keyset struct {
 	createdAt time.Time
 	id        pgtype.UUID
 }
 
-func encodeChallanCursor(createdAt time.Time, id string) string {
+func encodeKeyset(createdAt time.Time, id string) string {
 	return base64.RawURLEncoding.EncodeToString([]byte(createdAt.UTC().Format(time.RFC3339Nano) + "|" + id))
 }
 
-func decodeChallanCursor(s string) (*challanCursor, error) {
+func encodeChallanCursor(createdAt time.Time, id string) string { return encodeKeyset(createdAt, id) }
+
+func decodeChallanCursor(s string) (*keyset, error) { return decodeKeyset(s, errChallanCursor) }
+
+// decodeKeyset returns nil for an empty cursor (the first page) and bad for one that is not ours.
+func decodeKeyset(s string, bad error) (*keyset, error) {
 	if s == "" {
 		return nil, nil
 	}
 	raw, err := base64.RawURLEncoding.DecodeString(s)
 	if err != nil {
-		return nil, errChallanCursor
+		return nil, bad
 	}
 	ts, idStr, ok := strings.Cut(string(raw), "|")
 	if !ok {
-		return nil, errChallanCursor
+		return nil, bad
 	}
 	createdAt, err := time.Parse(time.RFC3339Nano, ts)
 	if err != nil {
-		return nil, errChallanCursor
+		return nil, bad
 	}
 	id, err := db.ParseUUID(idStr)
 	if err != nil {
-		return nil, errChallanCursor
+		return nil, bad
 	}
-	return &challanCursor{createdAt: createdAt, id: id}, nil
+	return &keyset{createdAt: createdAt, id: id}, nil
 }

@@ -375,3 +375,24 @@ func (s *Service) FirstEnrolmentDates(ctx context.Context, tx pgx.Tx, tenantID s
 	}
 	return out, nil
 }
+
+// RequireFamily returns a 404 unless the family exists in the caller's school. It runs inside the
+// caller's open tenant transaction; fees uses it before taking a payment (ADR-0013).
+func (s *Service) RequireFamily(ctx context.Context, tx pgx.Tx, tenantID, familyID string) error {
+	notFound := apperr.NotFound("students.family_not_found", "Family not found.")
+	tenant, err := db.ParseUUID(tenantID)
+	if err != nil {
+		return err
+	}
+	id, err := db.ParseUUID(familyID)
+	if err != nil {
+		return notFound
+	}
+	if _, err := gen.New(tx).FamilyExists(ctx, gen.FamilyExistsParams{TenantID: tenant, ID: id}); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return notFound
+		}
+		return fmt.Errorf("get family: %w", err)
+	}
+	return nil
+}

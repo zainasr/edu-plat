@@ -193,7 +193,16 @@ func toAPIChallan(c fees.Challan) (gen.Challan, error) {
 		Id: id, StudentId: studentID, FamilyId: familyID,
 		Month: openapitypes.Date{Time: c.Month}, DueDate: openapitypes.Date{Time: c.DueDate},
 		Status: gen.ChallanStatus(c.Status), NewAdmission: c.NewAdmission, Total: toAPIMoney(c.Total),
+		Paid: toAPIMoney(c.Paid), Balance: toAPIMoney(c.Total - c.Paid), PaymentStatus: toAPIProgress(c.PaymentStatus),
 		ChallanNo: c.ChallanNo, ConsumerNo: c.ConsumerNo, Lines: lines,
 		ReleasedAt: c.ReleasedAt, VoidReason: c.VoidReason, CreatedAt: c.CreatedAt,
 	}, nil
+}
+
+func toAPIProgress(s string) *gen.PaymentProgress {
+	if s == "" {
+		return nil
+	}
+	p := gen.PaymentProgress(s)
+	return &p
 }
