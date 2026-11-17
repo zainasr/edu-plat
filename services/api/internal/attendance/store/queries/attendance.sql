@@ -1,16 +1,20 @@
 -- name: GetSettings :one
-SELECT register_due_time, edit_window_days, low_attendance_percent
+SELECT register_due_time, edit_window_days, low_attendance_percent, morning_start, evening_start, late_after_minutes
 FROM attendance_settings
 WHERE tenant_id = sqlc.arg('tenant_id');
 
 -- name: SetSettings :exec
 -- The row is created the first time the settings are saved; until then reads use the defaults.
-INSERT INTO attendance_settings (tenant_id, register_due_time, edit_window_days, low_attendance_percent, updated_by)
+INSERT INTO attendance_settings (tenant_id, register_due_time, edit_window_days, low_attendance_percent,
+                                 morning_start, evening_start, late_after_minutes, updated_by)
 VALUES (sqlc.arg('tenant_id'), sqlc.arg('register_due_time')::time, sqlc.arg('edit_window_days'),
-        sqlc.arg('low_attendance_percent'), sqlc.arg('updated_by'))
+        sqlc.arg('low_attendance_percent'), sqlc.arg('morning_start')::time, sqlc.arg('evening_start')::time,
+        sqlc.arg('late_after_minutes'), sqlc.arg('updated_by'))
 ON CONFLICT (tenant_id) DO UPDATE
 SET register_due_time = EXCLUDED.register_due_time, edit_window_days = EXCLUDED.edit_window_days,
-    low_attendance_percent = EXCLUDED.low_attendance_percent, updated_at = now(), updated_by = EXCLUDED.updated_by;
+    low_attendance_percent = EXCLUDED.low_attendance_percent, morning_start = EXCLUDED.morning_start,
+    evening_start = EXCLUDED.evening_start, late_after_minutes = EXCLUDED.late_after_minutes,
+    updated_at = now(), updated_by = EXCLUDED.updated_by;
 
 -- name: InsertRegister :one
 -- DO NOTHING on (section, day): a register that already exists returns no row.
@@ -126,3 +130,124 @@ FROM (
     ORDER BY r.register_id, r.student_id, r.version DESC
 ) cur
 WHERE cur.status <> 'left';
+
+-- ---- cards and the gate scan (slice 6b) -----------------------------------------------
+
+-- name: DisableActiveCards :execrows
+-- Issuing a new card disables the student's current one first (one active card per student).
+UPDATE student_cards
+SET status = 'disabled', disabled_at = now(), disabled_by = sqlc.arg('disabled_by'), disabled_reason = sqlc.arg('reason')
+WHERE tenant_id = sqlc.arg('tenant_id') AND student_id = sqlc.arg('student_id') AND status = 'active';
+
+-- name: InsertCard :one
+INSERT INTO student_cards (tenant_id, student_id, issued_by)
+VALUES (sqlc.arg('tenant_id'), sqlc.arg('student_id'), sqlc.arg('issued_by'))
+RETURNING id, issued_at;
+
+-- name: GetCard :one
+SELECT id, student_id, status, issued_at, disabled_at, disabled_reason
+FROM student_cards
+WHERE tenant_id = sqlc.arg('tenant_id') AND id = sqlc.arg('id');
+
+-- name: ShareCard :one
+-- FOR SHARE: a scan holds the card until it commits, so disabling it (FOR UPDATE) waits for scans in flight
+-- and every scan that commits before the disable returns was made while the card was still active.
+SELECT id, student_id, status, issued_at, disabled_at, disabled_reason
+FROM student_cards
+WHERE tenant_id = sqlc.arg('tenant_id') AND id = sqlc.arg('id')
+FOR SHARE;
+
+-- name: LockCard :one
+SELECT id, student_id, status
+FROM student_cards
+WHERE tenant_id = sqlc.arg('tenant_id') AND id = sqlc.arg('id')
+FOR UPDATE;
+
+-- name: DisableCard :execrows
+UPDATE student_cards
+SET status = 'disabled', disabled_at = now(), disabled_by = sqlc.arg('disabled_by'), disabled_reason = sqlc.arg('reason')
+WHERE tenant_id = sqlc.arg('tenant_id') AND id = sqlc.arg('id') AND status = 'active';
+
+-- name: ListCardsForStudent :many
+SELECT id, student_id, status, issued_at, disabled_at, disabled_reason
+FROM student_cards
+WHERE tenant_id = sqlc.arg('tenant_id') AND student_id = sqlc.arg('student_id')
+ORDER BY issued_at DESC, id DESC;
+
+-- name: LockScanKey :exec
+-- One lock per student and day, so a double tap at the gate cannot record two arrivals.
+SELECT pg_advisory_xact_lock(hashtextextended('gate-scan:' || sqlc.arg('student_id')::text || ':' || sqlc.arg('day')::text, 0));
+
+-- name: ScanByClientID :one
+SELECT id, student_id, card_id, section_id, scanned_at, status
+FROM gate_scans
+WHERE tenant_id = sqlc.arg('tenant_id') AND client_scan_id = sqlc.arg('client_scan_id');
+
+-- name: ScanTimesForStudentDay :many
+SELECT scanned_at
+FROM gate_scans
+WHERE tenant_id = sqlc.arg('tenant_id') AND student_id = sqlc.arg('student_id') AND day = sqlc.arg('day')
+ORDER BY scanned_at;
+
+-- name: InsertScan :one
+INSERT INTO gate_scans (tenant_id, student_id, card_id, section_id, day, scanned_at, status, scanned_by, client_scan_id)
+VALUES (sqlc.arg('tenant_id'), sqlc.arg('student_id'), sqlc.arg('card_id'), sqlc.arg('section_id'), sqlc.arg('day'),
+        sqlc.arg('scanned_at'), sqlc.arg('status'), sqlc.arg('scanned_by'), sqlc.narg('client_scan_id'))
+RETURNING id;
+
+-- name: FirstScanOfDay :one
+-- A student's arrival: their earliest scan of the day.
+SELECT scanned_at, status
+FROM gate_scans
+WHERE tenant_id = sqlc.arg('tenant_id') AND student_id = sqlc.arg('student_id') AND day = sqlc.arg('day')
+ORDER BY scanned_at, id
+LIMIT 1;
+
+-- name: ListScansForDay :many
+SELECT id, student_id, section_id, scanned_at, status
+FROM gate_scans
+WHERE tenant_id = sqlc.arg('tenant_id') AND day = sqlc.arg('day')
+ORDER BY scanned_at, id;
+
+-- name: ArrivalsOnDay :many
+-- Each given student's first scan of the day.
+SELECT DISTINCT ON (student_id) student_id, scanned_at, status
+FROM gate_scans
+WHERE tenant_id = sqlc.arg('tenant_id') AND day = sqlc.arg('day') AND student_id = ANY(sqlc.arg('student_ids')::uuid[])
+ORDER BY student_id, scanned_at, id;
+
+-- name: MismatchesOnDay :many
+-- Gate against class, from submitted registers only. A student scanned but marked absent; or marked
+-- present or late but never scanned, in a section that had at least one scan that day.
+WITH cur AS (
+    SELECT DISTINCT ON (r.register_id, r.student_id) r.student_id, r.status, g.section_id
+    FROM attendance_records r
+    JOIN attendance_registers g ON g.tenant_id = r.tenant_id AND g.id = r.register_id
+    WHERE r.tenant_id = sqlc.arg('tenant_id') AND g.status = 'submitted' AND g.day = sqlc.arg('day')
+    ORDER BY r.register_id, r.student_id, r.version DESC
+), arrivals AS (
+    SELECT DISTINCT ON (student_id) student_id, scanned_at
+    FROM gate_scans
+    WHERE tenant_id = sqlc.arg('tenant_id') AND day = sqlc.arg('day')
+    ORDER BY student_id, scanned_at, id
+), scanned_sections AS (
+    -- A section "uses the gate" if a student who is counted in its register was scanned in it. A student who
+    -- was scanned and then moved (recorded as left) does not make their old section look scanned.
+    SELECT DISTINCT s.section_id
+    FROM gate_scans s
+    JOIN cur ON cur.student_id = s.student_id AND cur.section_id = s.section_id AND cur.status <> 'left'
+    WHERE s.tenant_id = sqlc.arg('tenant_id') AND s.day = sqlc.arg('day')
+)
+SELECT m.student_id, m.section_id, m.status, m.kind, m.gate_arrived_at
+FROM (
+    SELECT cur.student_id, cur.section_id, cur.status, a.scanned_at AS gate_arrived_at,
+           CASE
+               WHEN a.scanned_at IS NOT NULL AND cur.status = 'absent' THEN 'scanned_but_absent'
+               WHEN a.scanned_at IS NULL AND cur.status IN ('present', 'late')
+                    AND cur.section_id IN (SELECT section_id FROM scanned_sections) THEN 'present_but_not_scanned'
+           END::text AS kind
+    FROM cur
+    LEFT JOIN arrivals a ON a.student_id = cur.student_id
+) m
+WHERE m.kind IS NOT NULL
+ORDER BY m.section_id, m.kind, m.student_id;

@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Education Platform API
-  version: 0.11.0
+  version: 0.12.0
   description: Source of truth for every capability (DEC-004). Edit this first, then the code.
 # Infrastructure endpoints (health) sit at the root for the load balancer.
 # Product endpoints carry their version in the path, for example /api/v1/students.
@@ -1770,6 +1770,167 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
 
+  /api/v1/students/{studentId}/cards:
+    post:
+      operationId: issueStudentCard
+      tags: [attendance]
+      summary: Issue the student's ID card
+      description: |
+        Requires `student.edit`. Creates the card whose QR code is scanned at the gate. A student has one active
+        card: issuing a new one disables the old one in the same step, so a lost card stops working at once.
+        The code is signed with the school's secret and is the same every time, so a card can be reprinted.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - name: studentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "201":
+          description: The new card
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StudentCard" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/KeyReused" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    get:
+      operationId: listStudentCards
+      tags: [attendance]
+      summary: The student's cards, newest first
+      description: Requires `student.edit`. The code is shown only for the active card.
+      parameters:
+        - name: studentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: The cards
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StudentCardList" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/student-cards/{cardId}/disable:
+    post:
+      operationId: disableStudentCard
+      tags: [attendance]
+      summary: Disable a card (lost, stolen, replaced)
+      description: Requires `student.edit`. Disabled at once; a scan of it marks nothing. Kept as history.
+      parameters:
+        - name: cardId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CardDisable" }
+      responses:
+        "200":
+          description: The disabled card
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StudentCard" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/attendance/scan:
+    post:
+      operationId: scanCard
+      tags: [attendance]
+      summary: Record a student's arrival from a scanned card
+      description: |
+        Requires `attendance.scan`; every scan is stored with the signed-in user (BR-ATT-006). The code is checked
+        for its signature before anything is looked up. A good scan records the arrival as `present`, or `late`
+        after the shift's start plus its grace. A second scan of the same student within 2 minutes is ignored
+        (`outcome: duplicate`). An offline computer sends the time it scanned and a `client_scan_id`; sending the
+        same id again returns the same result and adds nothing. A forged or unknown code is 404
+        `attendance.card_invalid`; a disabled card is 409 `attendance.card_disabled`; a day that is not a school
+        day is 409 `attendance.not_school_day`; a student not enrolled in a section that day is 409
+        `attendance.not_enrolled`. Nothing is marked in any of those cases. The class register is not changed:
+        the arrival shows beside it, and disagreements are listed under mismatches (REQ-ATT-017).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ScanCreate" }
+      responses:
+        "200":
+          description: The scan result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScanResult" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/attendance/gate-scans:
+    get:
+      operationId: listGateScans
+      tags: [attendance]
+      summary: The gate scans of a day
+      description: Requires `attendance.view`. Oldest first. `is_arrival` marks each student's first scan of the day.
+      parameters:
+        - name: date
+          in: query
+          required: false
+          description: Required; a missing value is a 400 `attendance.date_invalid` (checked after the permission).
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: The scans
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GateScanList" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/attendance/mismatches:
+    get:
+      operationId: listAttendanceMismatches
+      tags: [attendance]
+      summary: Where the gate and the class register disagree
+      description: |
+        Requires `attendance.view`. From submitted registers only. `scanned_but_absent`: scanned at the gate but
+        marked absent in class. `present_but_not_scanned`: marked present or late in class but never scanned,
+        listed only for sections that had at least one scan that day, so a school or section that does not use
+        the gate is not flooded. Nothing is changed automatically; an Admin reviews the list (REQ-ATT-017).
+      parameters:
+        - name: date
+          in: query
+          required: false
+          description: Required; a missing value is a 400 `attendance.date_invalid` (checked after the permission).
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: The mismatches
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MismatchList" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
 components:
   parameters:
     IdempotencyKey:
@@ -2863,7 +3024,21 @@ components:
     AttendanceSettings:
       type: object
       required: [register_due_time, edit_window_days, low_attendance_percent]
+      description: The responses always carry every field; on a request the three shift fields may be left out and keep their saved values.
       properties:
+        morning_start:
+          type: string
+          example: "08:00"
+          description: HH:MM in Asia/Karachi. When the morning shift starts.
+        evening_start:
+          type: string
+          example: "13:00"
+          description: HH:MM in Asia/Karachi. When the evening shift starts.
+        late_after_minutes:
+          type: integer
+          minimum: 0
+          maximum: 120
+          description: A gate scan later than the shift's start plus this many minutes is late.
         register_due_time:
           type: string
           example: "10:00"
@@ -2896,6 +3071,8 @@ components:
         method: { type: string, enum: [prefill, manual, correction] }
         version: { type: integer, description: 1 for the first entry; each change adds one. }
         corrected: { type: boolean, description: True when changed after the register was submitted. }
+        gate_arrived_at: { type: string, format: date-time, nullable: true, description: The student's first gate scan that day, if any. }
+        gate_status: { type: string, enum: [present, late], nullable: true, description: How the gate classed that arrival. }
 
     RegisterCounts:
       type: object
@@ -3090,3 +3267,110 @@ components:
         days:
           type: array
           items: { $ref: "#/components/schemas/StudentDay" }
+
+    StudentCard:
+      type: object
+      required: [id, student_id, status, issued_at]
+      properties:
+        id: { type: string, format: uuid }
+        student_id: { type: string, format: uuid }
+        status: { type: string, enum: [active, disabled] }
+        code:
+          type: string
+          nullable: true
+          description: What the QR holds. Present for the active card only. Treat it as a credential.
+        issued_at: { type: string, format: date-time }
+        disabled_at: { type: string, format: date-time, nullable: true }
+        disabled_reason: { type: string, nullable: true }
+
+    StudentCardList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/StudentCard" }
+
+    CardDisable:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 3, maxLength: 200 }
+
+    ScanCreate:
+      type: object
+      required: [code]
+      properties:
+        code: { type: string, description: The text read from the card's QR. }
+        scanned_at:
+          type: string
+          format: date-time
+          description: When the card was scanned, for an offline computer uploading later. Within the last 24 hours. Defaults to now.
+        client_scan_id:
+          type: string
+          format: uuid
+          description: Chosen by the scanning computer. Sending the same id again is safe and returns the same result.
+
+    ScanStudent:
+      type: object
+      required: [id, registration_no, full_name, section_name]
+      properties:
+        id: { type: string, format: uuid }
+        registration_no: { type: string }
+        full_name: { type: string }
+        section_name: { type: string }
+
+    ScanResult:
+      type: object
+      required: [outcome, status, scanned_at, arrival_at, student]
+      properties:
+        outcome: { type: string, enum: [accepted, duplicate] }
+        status: { type: string, enum: [present, late], description: The student's arrival status for the day. }
+        scanned_at: { type: string, format: date-time }
+        arrival_at: { type: string, format: date-time, description: The student's first scan of the day. }
+        student: { $ref: "#/components/schemas/ScanStudent" }
+
+    GateScan:
+      type: object
+      required: [id, student_id, registration_no, full_name, section_id, section_name, scanned_at, status, is_arrival]
+      properties:
+        id: { type: string, format: uuid }
+        student_id: { type: string, format: uuid }
+        registration_no: { type: string }
+        full_name: { type: string }
+        section_id: { type: string, format: uuid }
+        section_name: { type: string }
+        scanned_at: { type: string, format: date-time }
+        status: { type: string, enum: [present, late] }
+        is_arrival: { type: boolean }
+
+    GateScanList:
+      type: object
+      required: [date, items]
+      properties:
+        date: { type: string, format: date }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/GateScan" }
+
+    Mismatch:
+      type: object
+      required: [student_id, registration_no, full_name, section_id, section_name, kind, register_status]
+      properties:
+        student_id: { type: string, format: uuid }
+        registration_no: { type: string }
+        full_name: { type: string }
+        section_id: { type: string, format: uuid }
+        section_name: { type: string }
+        kind: { type: string, enum: [scanned_but_absent, present_but_not_scanned] }
+        register_status: { $ref: "#/components/schemas/AttendanceStatus" }
+        gate_arrived_at: { type: string, format: date-time, nullable: true }
+
+    MismatchList:
+      type: object
+      required: [date, items]
+      properties:
+        date: { type: string, format: date }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Mismatch" }

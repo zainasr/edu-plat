@@ -60,7 +60,7 @@ Permissions are flags named `module.action`, grouped into roles (about 60 to 80 
 | iam | `user.view`, `user.manage`, `role.manage`, `token.manage`, `audit.view` |
 | student | `student.view`, `student.create`, `student.edit`, `student.withdraw`, `student.delete_request`, `student.import`, `student.export`, `family.manage`, `student.merge` |
 | admission | `enquiry.view`, `enquiry.manage`, `quotation.create`, `quotation.send`, `quotation.discount.approve`, `admission.create`, `promotion.run`, `certificate.issue` |
-| attendance | `attendance.view`, `attendance.mark`, `attendance.edit_within_window`, `attendance.edit_any`, `attendance.settings`, `staff_attendance.view`, `staff_attendance.manage` |
+| attendance | `attendance.view`, `attendance.mark`, `attendance.scan`, `attendance.contacts`, `attendance.edit_within_window`, `attendance.edit_any`, `attendance.settings`, `staff_attendance.view`, `staff_attendance.manage` |
 | fee | `fee.view`, `fee.plan.manage`, `fee.generate`, `fee.release`, `fee.collect`, `fee.discount.give`, `fee.discount.approve`, `fee.latefee.waive`, `payment.void`, `payment.void.approve`, `fee.refund`, `fee.settings`, `fee.export` |
 | accounting | `report.owner.view`, `report.finance.view`, `ledger.view`, `journal.manual`, `period.close`, `expense.create`, `expense.approve`, `cash.session.manage`, `account.manage` |
 | staff | `staff.view`, `staff.manage`, `staff.assign`, `leave.request`, `leave.approve`, `payroll.generate`, `payroll.approve`, `payroll.pay`, `payslip.view_own`, `payslip.view_all` |

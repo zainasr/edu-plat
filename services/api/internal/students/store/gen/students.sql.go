@@ -698,6 +698,29 @@ func (q *Queries) PrimaryContacts(ctx context.Context, arg PrimaryContactsParams
 	return items, nil
 }
 
+const sectionOnDay = `-- name: SectionOnDay :one
+SELECT section_id
+FROM enrolments
+WHERE tenant_id = $1 AND student_id = $2
+  AND started_on <= $3::date AND (ended_on IS NULL OR ended_on > $3::date)
+ORDER BY started_on DESC, created_at DESC
+LIMIT 1
+`
+
+type SectionOnDayParams struct {
+	TenantID  pgtype.UUID
+	StudentID pgtype.UUID
+	OnDay     pgtype.Date
+}
+
+// The section a student was enrolled in on a date (see SectionRoster for the date rule).
+func (q *Queries) SectionOnDay(ctx context.Context, arg SectionOnDayParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, sectionOnDay, arg.TenantID, arg.StudentID, arg.OnDay)
+	var section_id pgtype.UUID
+	err := row.Scan(&section_id)
+	return section_id, err
+}
+
 const sectionRoster = `-- name: SectionRoster :many
 SELECT s.id, s.registration_no, s.full_name
 FROM enrolments e

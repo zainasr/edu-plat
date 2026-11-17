@@ -18,6 +18,24 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for AttendanceRecordGateStatus.
+const (
+	AttendanceRecordGateStatusLate    AttendanceRecordGateStatus = "late"
+	AttendanceRecordGateStatusPresent AttendanceRecordGateStatus = "present"
+)
+
+// Valid indicates whether the value is a known member of the AttendanceRecordGateStatus enum.
+func (e AttendanceRecordGateStatus) Valid() bool {
+	switch e {
+	case AttendanceRecordGateStatusLate:
+		return true
+	case AttendanceRecordGateStatusPresent:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AttendanceRecordMethod.
 const (
 	Correction AttendanceRecordMethod = "correction"
@@ -264,6 +282,24 @@ func (e FeeTypeStatus) Valid() bool {
 	}
 }
 
+// Defines values for GateScanStatus.
+const (
+	GateScanStatusLate    GateScanStatus = "late"
+	GateScanStatusPresent GateScanStatus = "present"
+)
+
+// Valid indicates whether the value is a known member of the GateScanStatus enum.
+func (e GateScanStatus) Valid() bool {
+	switch e {
+	case GateScanStatusLate:
+		return true
+	case GateScanStatusPresent:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for Gender.
 const (
 	GenderFemale Gender = "female"
@@ -375,6 +411,24 @@ func (e MarkStatus) Valid() bool {
 	case MarkStatusLeave:
 		return true
 	case MarkStatusPresent:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MismatchKind.
+const (
+	PresentButNotScanned MismatchKind = "present_but_not_scanned"
+	ScannedButAbsent     MismatchKind = "scanned_but_absent"
+)
+
+// Valid indicates whether the value is a known member of the MismatchKind enum.
+func (e MismatchKind) Valid() bool {
+	switch e {
+	case PresentButNotScanned:
+		return true
+	case ScannedButAbsent:
 		return true
 	default:
 		return false
@@ -555,6 +609,42 @@ func (e RoleName) Valid() bool {
 	}
 }
 
+// Defines values for ScanResultOutcome.
+const (
+	Accepted  ScanResultOutcome = "accepted"
+	Duplicate ScanResultOutcome = "duplicate"
+)
+
+// Valid indicates whether the value is a known member of the ScanResultOutcome enum.
+func (e ScanResultOutcome) Valid() bool {
+	switch e {
+	case Accepted:
+		return true
+	case Duplicate:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ScanResultStatus.
+const (
+	ScanResultStatusLate    ScanResultStatus = "late"
+	ScanResultStatusPresent ScanResultStatus = "present"
+)
+
+// Valid indicates whether the value is a known member of the ScanResultStatus enum.
+func (e ScanResultStatus) Valid() bool {
+	switch e {
+	case ScanResultStatusLate:
+		return true
+	case ScanResultStatusPresent:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SectionStatus.
 const (
 	SectionStatusActive   SectionStatus = "active"
@@ -618,6 +708,24 @@ const (
 func (e StudentStatus) Valid() bool {
 	switch e {
 	case StudentStatusActive:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for StudentCardStatus.
+const (
+	StudentCardStatusActive   StudentCardStatus = "active"
+	StudentCardStatusDisabled StudentCardStatus = "disabled"
+)
+
+// Valid indicates whether the value is a known member of the StudentCardStatus enum.
+func (e StudentCardStatus) Valid() bool {
+	switch e {
+	case StudentCardStatusActive:
+		return true
+	case StudentCardStatusDisabled:
 		return true
 	default:
 		return false
@@ -706,10 +814,16 @@ type AllocationInput struct {
 // AttendanceRecord defines model for AttendanceRecord.
 type AttendanceRecord struct {
 	// Corrected True when changed after the register was submitted.
-	Corrected      bool                   `json:"corrected"`
-	FullName       string                 `json:"full_name"`
-	Method         AttendanceRecordMethod `json:"method"`
-	RegistrationNo string                 `json:"registration_no"`
+	Corrected bool   `json:"corrected"`
+	FullName  string `json:"full_name"`
+
+	// GateArrivedAt The student's first gate scan that day
+	GateArrivedAt *time.Time `json:"gate_arrived_at,omitempty"`
+
+	// GateStatus How the gate classed that arrival.
+	GateStatus     *AttendanceRecordGateStatus `json:"gate_status,omitempty"`
+	Method         AttendanceRecordMethod      `json:"method"`
+	RegistrationNo string                      `json:"registration_no"`
 
 	// Status `left` appears only on a submitted register, for a student who moved to another section or withdrew
 	// that day; they are not counted anywhere.
@@ -720,14 +834,30 @@ type AttendanceRecord struct {
 	Version int `json:"version"`
 }
 
+// AttendanceRecordGateStatus How the gate classed that arrival.
+type AttendanceRecordGateStatus string
+
 // AttendanceRecordMethod defines model for AttendanceRecord.Method.
 type AttendanceRecordMethod string
 
-// AttendanceSettings defines model for AttendanceSettings.
+// AttendanceSettings The responses always carry every field; on a request the three shift fields may be left out and keep their saved values.
 type AttendanceSettings struct {
 	// EditWindowDays How many days back `attendance.edit_within_window` may correct a submitted register.
-	EditWindowDays       int `json:"edit_window_days"`
-	LowAttendancePercent int `json:"low_attendance_percent"`
+	EditWindowDays int `json:"edit_window_days"`
+
+	// EveningStart HH:MM in Asia/Karachi. When the evening shift starts.
+	//
+	// Example: 13:00
+	EveningStart *string `json:"evening_start,omitempty"`
+
+	// LateAfterMinutes A gate scan later than the shift's start plus this many minutes is late.
+	LateAfterMinutes     *int `json:"late_after_minutes,omitempty"`
+	LowAttendancePercent int  `json:"low_attendance_percent"`
+
+	// MorningStart HH:MM in Asia/Karachi. When the morning shift starts.
+	//
+	// Example: 08:00
+	MorningStart *string `json:"morning_start,omitempty"`
 
 	// RegisterDueTime HH:MM in Asia/Karachi. A register not submitted by then is reported missing.
 	//
@@ -791,6 +921,11 @@ type CalendarDaysCreate struct {
 
 // CalendarKind defines model for CalendarKind.
 type CalendarKind string
+
+// CardDisable defines model for CardDisable.
+type CardDisable struct {
+	Reason string `json:"reason"`
+}
 
 // Challan defines model for Challan.
 type Challan struct {
@@ -1094,6 +1229,28 @@ type FeeTypeList struct {
 	Items []FeeType `json:"items"`
 }
 
+// GateScan defines model for GateScan.
+type GateScan struct {
+	FullName       string             `json:"full_name"`
+	Id             openapi_types.UUID `json:"id"`
+	IsArrival      bool               `json:"is_arrival"`
+	RegistrationNo string             `json:"registration_no"`
+	ScannedAt      time.Time          `json:"scanned_at"`
+	SectionId      openapi_types.UUID `json:"section_id"`
+	SectionName    string             `json:"section_name"`
+	Status         GateScanStatus     `json:"status"`
+	StudentId      openapi_types.UUID `json:"student_id"`
+}
+
+// GateScanStatus defines model for GateScan.Status.
+type GateScanStatus string
+
+// GateScanList defines model for GateScanList.
+type GateScanList struct {
+	Date  openapi_types.Date `json:"date"`
+	Items []GateScan         `json:"items"`
+}
+
 // Gender defines model for Gender.
 type Gender string
 
@@ -1255,6 +1412,30 @@ type LowAttendanceList struct {
 
 // MarkStatus The statuses a person can set.
 type MarkStatus string
+
+// Mismatch defines model for Mismatch.
+type Mismatch struct {
+	FullName      string       `json:"full_name"`
+	GateArrivedAt *time.Time   `json:"gate_arrived_at,omitempty"`
+	Kind          MismatchKind `json:"kind"`
+
+	// RegisterStatus `left` appears only on a submitted register, for a student who moved to another section or withdrew
+	// that day; they are not counted anywhere.
+	RegisterStatus AttendanceStatus   `json:"register_status"`
+	RegistrationNo string             `json:"registration_no"`
+	SectionId      openapi_types.UUID `json:"section_id"`
+	SectionName    string             `json:"section_name"`
+	StudentId      openapi_types.UUID `json:"student_id"`
+}
+
+// MismatchKind defines model for Mismatch.Kind.
+type MismatchKind string
+
+// MismatchList defines model for MismatchList.
+type MismatchList struct {
+	Date  openapi_types.Date `json:"date"`
+	Items []Mismatch         `json:"items"`
+}
 
 // MissingRegister defines model for MissingRegister.
 type MissingRegister struct {
@@ -1567,6 +1748,44 @@ type RoleList struct {
 // RoleName defines model for RoleName.
 type RoleName string
 
+// ScanCreate defines model for ScanCreate.
+type ScanCreate struct {
+	// ClientScanId Chosen by the scanning computer. Sending the same id again is safe and returns the same result.
+	ClientScanId *openapi_types.UUID `json:"client_scan_id,omitempty"`
+
+	// Code The text read from the card's QR.
+	Code string `json:"code"`
+
+	// ScannedAt When the card was scanned, for an offline computer uploading later. Within the last 24 hours. Defaults to now.
+	ScannedAt *time.Time `json:"scanned_at,omitempty"`
+}
+
+// ScanResult defines model for ScanResult.
+type ScanResult struct {
+	// ArrivalAt The student's first scan of the day.
+	ArrivalAt time.Time         `json:"arrival_at"`
+	Outcome   ScanResultOutcome `json:"outcome"`
+	ScannedAt time.Time         `json:"scanned_at"`
+
+	// Status The student's arrival status for the day.
+	Status  ScanResultStatus `json:"status"`
+	Student ScanStudent      `json:"student"`
+}
+
+// ScanResultOutcome defines model for ScanResult.Outcome.
+type ScanResultOutcome string
+
+// ScanResultStatus The student's arrival status for the day.
+type ScanResultStatus string
+
+// ScanStudent defines model for ScanStudent.
+type ScanStudent struct {
+	FullName       string             `json:"full_name"`
+	Id             openapi_types.UUID `json:"id"`
+	RegistrationNo string             `json:"registration_no"`
+	SectionName    string             `json:"section_name"`
+}
+
 // Section defines model for Section.
 type Section struct {
 	ClassId   openapi_types.UUID `json:"class_id"`
@@ -1685,6 +1904,26 @@ type StudentAttendance struct {
 	StudentId openapi_types.UUID `json:"student_id"`
 	To        openapi_types.Date `json:"to"`
 	Totals    AttendanceTotals   `json:"totals"`
+}
+
+// StudentCard defines model for StudentCard.
+type StudentCard struct {
+	// Code What the QR holds. Present for the active card only. Treat it as a credential.
+	Code           *string            `json:"code,omitempty"`
+	DisabledAt     *time.Time         `json:"disabled_at,omitempty"`
+	DisabledReason *string            `json:"disabled_reason,omitempty"`
+	Id             openapi_types.UUID `json:"id"`
+	IssuedAt       time.Time          `json:"issued_at"`
+	Status         StudentCardStatus  `json:"status"`
+	StudentId      openapi_types.UUID `json:"student_id"`
+}
+
+// StudentCardStatus defines model for StudentCard.Status.
+type StudentCardStatus string
+
+// StudentCardList defines model for StudentCardList.
+type StudentCardList struct {
+	Items []StudentCard `json:"items"`
 }
 
 // StudentCreate defines model for StudentCreate.
@@ -1826,6 +2065,12 @@ type ListAbsentTodayParams struct {
 	Date *openapi_types.Date `form:"date,omitempty" json:"date,omitempty"`
 }
 
+// ListGateScansParams defines parameters for ListGateScans.
+type ListGateScansParams struct {
+	// Date Required; a missing value is a 400 `attendance.date_invalid` (checked after the permission).
+	Date *openapi_types.Date `form:"date,omitempty" json:"date,omitempty"`
+}
+
 // ListLowAttendanceParams defines parameters for ListLowAttendance.
 type ListLowAttendanceParams struct {
 	// From Required; a missing value is a 400 `attendance.date_invalid` (checked after the permission).
@@ -1834,6 +2079,12 @@ type ListLowAttendanceParams struct {
 	// To Required; a missing value is a 400 `attendance.date_invalid` (checked after the permission).
 	To        *openapi_types.Date `form:"to,omitempty" json:"to,omitempty"`
 	Threshold *int                `form:"threshold,omitempty" json:"threshold,omitempty"`
+}
+
+// ListAttendanceMismatchesParams defines parameters for ListAttendanceMismatches.
+type ListAttendanceMismatchesParams struct {
+	// Date Required; a missing value is a 400 `attendance.date_invalid` (checked after the permission).
+	Date *openapi_types.Date `form:"date,omitempty" json:"date,omitempty"`
 }
 
 // ListMissingRegistersParams defines parameters for ListMissingRegisters.
@@ -2035,6 +2286,19 @@ type GetStudentAttendanceParams struct {
 	To *openapi_types.Date `form:"to,omitempty" json:"to,omitempty"`
 }
 
+// IssueStudentCardParams defines parameters for IssueStudentCard.
+type IssueStudentCardParams struct {
+	// IdempotencyKey A client-chosen unique string (8 to 128 characters: letters, digits, `.`, `_`, `:`, `-`) that makes
+	// a retry safe (REQ-API-010). The key belongs to the user who first sent it, for one endpoint and one
+	// exact request (path, query and body). A repeat of that request returns the original successful
+	// response (header `Idempotent-Replay: true`; only the status, body and Content-Type are replayed)
+	// and does nothing again. The same key with anything different, including another user, is refused
+	// with 422 `idempotency.key_reused`. While the first request is still running a repeat gets 409
+	// `idempotency.in_progress`. Only successful responses (below 400) are remembered, for 24 hours; an
+	// error frees the key so the same request can be retried. Optional for now; payments will require it.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // GetFeeStructureParams defines parameters for GetFeeStructure.
 type GetFeeStructureParams struct {
 	// Month Any date in the month. Defaults to the current month (Asia/Karachi).
@@ -2049,6 +2313,9 @@ type CorrectRecordJSONRequestBody = RecordCorrection
 
 // MarkRecordsJSONRequestBody defines body for MarkRecords for application/json ContentType.
 type MarkRecordsJSONRequestBody = RecordsMark
+
+// ScanCardJSONRequestBody defines body for ScanCard for application/json ContentType.
+type ScanCardJSONRequestBody = ScanCreate
 
 // SetAttendanceSettingsJSONRequestBody defines body for SetAttendanceSettings for application/json ContentType.
 type SetAttendanceSettingsJSONRequestBody = AttendanceSettings
@@ -2104,6 +2371,9 @@ type CreateStaffJSONRequestBody = StaffCreate
 // AssignRoleJSONRequestBody defines body for AssignRole for application/json ContentType.
 type AssignRoleJSONRequestBody = RoleAssign
 
+// DisableStudentCardJSONRequestBody defines body for DisableStudentCard for application/json ContentType.
+type DisableStudentCardJSONRequestBody = CardDisable
+
 // CreateStudentJSONRequestBody defines body for CreateStudent for application/json ContentType.
 type CreateStudentJSONRequestBody = StudentCreate
 
@@ -2124,9 +2394,15 @@ type ServerInterface interface {
 	// ListAbsentToday Students marked absent on a date, with a contact to call
 	// (GET /api/v1/attendance/absent)
 	ListAbsentToday(w http.ResponseWriter, r *http.Request, params ListAbsentTodayParams)
+	// ListGateScans The gate scans of a day
+	// (GET /api/v1/attendance/gate-scans)
+	ListGateScans(w http.ResponseWriter, r *http.Request, params ListGateScansParams)
 	// ListLowAttendance Students whose attendance is below a threshold over a period
 	// (GET /api/v1/attendance/low)
 	ListLowAttendance(w http.ResponseWriter, r *http.Request, params ListLowAttendanceParams)
+	// ListAttendanceMismatches Where the gate and the class register disagree
+	// (GET /api/v1/attendance/mismatches)
+	ListAttendanceMismatches(w http.ResponseWriter, r *http.Request, params ListAttendanceMismatchesParams)
 	// ListMissingRegisters Sections with no submitted register once the due time has passed
 	// (GET /api/v1/attendance/missing-registers)
 	ListMissingRegisters(w http.ResponseWriter, r *http.Request, params ListMissingRegistersParams)
@@ -2148,6 +2424,9 @@ type ServerInterface interface {
 	// SubmitRegister Submit the register
 	// (POST /api/v1/attendance/registers/{registerId}/submit)
 	SubmitRegister(w http.ResponseWriter, r *http.Request, registerId openapi_types.UUID)
+	// ScanCard Record a student's arrival from a scanned card
+	// (POST /api/v1/attendance/scan)
+	ScanCard(w http.ResponseWriter, r *http.Request)
 	// GetAttendanceSettings The school's attendance settings
 	// (GET /api/v1/attendance/settings)
 	GetAttendanceSettings(w http.ResponseWriter, r *http.Request)
@@ -2289,6 +2568,9 @@ type ServerInterface interface {
 	// RevokeRole Take a role away from a staff member
 	// (POST /api/v1/staff/{staffId}/roles/{role}/revoke)
 	RevokeRole(w http.ResponseWriter, r *http.Request, staffId openapi_types.UUID, role RoleName)
+	// DisableStudentCard Disable a card (lost, stolen, replaced)
+	// (POST /api/v1/student-cards/{cardId}/disable)
+	DisableStudentCard(w http.ResponseWriter, r *http.Request, cardId openapi_types.UUID)
 	// ListStudents List students in the caller's tenant (cursor paginated)
 	// (GET /api/v1/students)
 	ListStudents(w http.ResponseWriter, r *http.Request, params ListStudentsParams)
@@ -2301,6 +2583,12 @@ type ServerInterface interface {
 	// GetStudentAttendance One student's attendance over a period
 	// (GET /api/v1/students/{studentId}/attendance)
 	GetStudentAttendance(w http.ResponseWriter, r *http.Request, studentId openapi_types.UUID, params GetStudentAttendanceParams)
+	// ListStudentCards The student's cards, newest first
+	// (GET /api/v1/students/{studentId}/cards)
+	ListStudentCards(w http.ResponseWriter, r *http.Request, studentId openapi_types.UUID)
+	// IssueStudentCard Issue the student's ID card
+	// (POST /api/v1/students/{studentId}/cards)
+	IssueStudentCard(w http.ResponseWriter, r *http.Request, studentId openapi_types.UUID, params IssueStudentCardParams)
 	// ChangeStudentSection Move a student to another section, keeping history
 	// (POST /api/v1/students/{studentId}/change-section)
 	ChangeStudentSection(w http.ResponseWriter, r *http.Request, studentId openapi_types.UUID)
@@ -2380,6 +2668,39 @@ func (siw *ServerInterfaceWrapper) ListAbsentToday(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// ListGateScans operation middleware
+func (siw *ServerInterfaceWrapper) ListGateScans(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListGateScansParams
+
+	// ------------- Optional query parameter "date" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "date", r.URL.Query(), &params.Date, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "date"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "date", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListGateScans(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListLowAttendance operation middleware
 func (siw *ServerInterfaceWrapper) ListLowAttendance(w http.ResponseWriter, r *http.Request) {
 
@@ -2430,6 +2751,39 @@ func (siw *ServerInterfaceWrapper) ListLowAttendance(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListLowAttendance(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListAttendanceMismatches operation middleware
+func (siw *ServerInterfaceWrapper) ListAttendanceMismatches(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListAttendanceMismatchesParams
+
+	// ------------- Optional query parameter "date" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "date", r.URL.Query(), &params.Date, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "date"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "date", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAttendanceMismatches(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2614,6 +2968,20 @@ func (siw *ServerInterfaceWrapper) SubmitRegister(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SubmitRegister(w, r, registerId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ScanCard operation middleware
+func (siw *ServerInterfaceWrapper) ScanCard(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ScanCard(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4040,6 +4408,32 @@ func (siw *ServerInterfaceWrapper) RevokeRole(w http.ResponseWriter, r *http.Req
 	handler.ServeHTTP(w, r)
 }
 
+// DisableStudentCard operation middleware
+func (siw *ServerInterfaceWrapper) DisableStudentCard(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "cardId" -------------
+	var cardId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cardId", r.PathValue("cardId"), &cardId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cardId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DisableStudentCard(w, r, cardId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListStudents operation middleware
 func (siw *ServerInterfaceWrapper) ListStudents(w http.ResponseWriter, r *http.Request) {
 
@@ -4199,6 +4593,82 @@ func (siw *ServerInterfaceWrapper) GetStudentAttendance(w http.ResponseWriter, r
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetStudentAttendance(w, r, studentId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListStudentCards operation middleware
+func (siw *ServerInterfaceWrapper) ListStudentCards(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "studentId" -------------
+	var studentId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "studentId", r.PathValue("studentId"), &studentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "studentId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListStudentCards(w, r, studentId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// IssueStudentCard operation middleware
+func (siw *ServerInterfaceWrapper) IssueStudentCard(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "studentId" -------------
+	var studentId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "studentId", r.PathValue("studentId"), &studentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "studentId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params IssueStudentCardParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.IssueStudentCard(w, r, studentId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4570,6 +5040,12 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/attendance/absent", wrapper.ListAbsentToday)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/attendance/low", wrapper.ListLowAttendance)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/students/{studentId}/attendance", wrapper.GetStudentAttendance)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/students/{studentId}/cards", wrapper.ListStudentCards)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/students/{studentId}/cards", wrapper.IssueStudentCard)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/student-cards/{cardId}/disable", wrapper.DisableStudentCard)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/attendance/scan", wrapper.ScanCard)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/attendance/gate-scans", wrapper.ListGateScans)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/attendance/mismatches", wrapper.ListAttendanceMismatches)
 
 	return m
 }
@@ -4733,6 +5209,84 @@ func (response ListAbsentToday500JSONResponse) VisitListAbsentTodayResponse(w ht
 	return err
 }
 
+type ListGateScansRequestObject struct {
+	Params ListGateScansParams
+}
+
+type ListGateScansResponseObject interface {
+	VisitListGateScansResponse(w http.ResponseWriter) error
+}
+
+type ListGateScans200JSONResponse GateScanList
+
+func (response ListGateScans200JSONResponse) VisitListGateScansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListGateScans400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response ListGateScans400JSONResponse) VisitListGateScansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListGateScans401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ListGateScans401JSONResponse) VisitListGateScansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListGateScans403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListGateScans403JSONResponse) VisitListGateScansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListGateScans500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListGateScans500JSONResponse) VisitListGateScansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListLowAttendanceRequestObject struct {
 	Params ListLowAttendanceParams
 }
@@ -4800,6 +5354,84 @@ func (response ListLowAttendance403JSONResponse) VisitListLowAttendanceResponse(
 type ListLowAttendance500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response ListLowAttendance500JSONResponse) VisitListLowAttendanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAttendanceMismatchesRequestObject struct {
+	Params ListAttendanceMismatchesParams
+}
+
+type ListAttendanceMismatchesResponseObject interface {
+	VisitListAttendanceMismatchesResponse(w http.ResponseWriter) error
+}
+
+type ListAttendanceMismatches200JSONResponse MismatchList
+
+func (response ListAttendanceMismatches200JSONResponse) VisitListAttendanceMismatchesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAttendanceMismatches400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response ListAttendanceMismatches400JSONResponse) VisitListAttendanceMismatchesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAttendanceMismatches401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ListAttendanceMismatches401JSONResponse) VisitListAttendanceMismatchesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAttendanceMismatches403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListAttendanceMismatches403JSONResponse) VisitListAttendanceMismatchesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAttendanceMismatches500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListAttendanceMismatches500JSONResponse) VisitListAttendanceMismatchesResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -5474,6 +6106,112 @@ func (response SubmitRegister409JSONResponse) VisitSubmitRegisterResponse(w http
 type SubmitRegister500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response SubmitRegister500JSONResponse) VisitSubmitRegisterResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ScanCardRequestObject struct {
+	Body *ScanCardJSONRequestBody
+}
+
+type ScanCardResponseObject interface {
+	VisitScanCardResponse(w http.ResponseWriter) error
+}
+
+type ScanCard200JSONResponse ScanResult
+
+func (response ScanCard200JSONResponse) VisitScanCardResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ScanCard400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response ScanCard400JSONResponse) VisitScanCardResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ScanCard401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ScanCard401JSONResponse) VisitScanCardResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ScanCard403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ScanCard403JSONResponse) VisitScanCardResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ScanCard404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ScanCard404JSONResponse) VisitScanCardResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ScanCard409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ScanCard409JSONResponse) VisitScanCardResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ScanCard500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ScanCard500JSONResponse) VisitScanCardResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -9594,6 +10332,113 @@ func (response RevokeRole500JSONResponse) VisitRevokeRoleResponse(w http.Respons
 	return err
 }
 
+type DisableStudentCardRequestObject struct {
+	CardId openapi_types.UUID `json:"cardId"`
+	Body   *DisableStudentCardJSONRequestBody
+}
+
+type DisableStudentCardResponseObject interface {
+	VisitDisableStudentCardResponse(w http.ResponseWriter) error
+}
+
+type DisableStudentCard200JSONResponse StudentCard
+
+func (response DisableStudentCard200JSONResponse) VisitDisableStudentCardResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DisableStudentCard400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response DisableStudentCard400JSONResponse) VisitDisableStudentCardResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DisableStudentCard401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response DisableStudentCard401JSONResponse) VisitDisableStudentCardResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DisableStudentCard403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DisableStudentCard403JSONResponse) VisitDisableStudentCardResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DisableStudentCard404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DisableStudentCard404JSONResponse) VisitDisableStudentCardResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DisableStudentCard409JSONResponse struct{ ConflictJSONResponse }
+
+func (response DisableStudentCard409JSONResponse) VisitDisableStudentCardResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DisableStudentCard500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response DisableStudentCard500JSONResponse) VisitDisableStudentCardResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListStudentsRequestObject struct {
 	Params ListStudentsParams
 }
@@ -9925,6 +10770,205 @@ func (response GetStudentAttendance404JSONResponse) VisitGetStudentAttendanceRes
 type GetStudentAttendance500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response GetStudentAttendance500JSONResponse) VisitGetStudentAttendanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListStudentCardsRequestObject struct {
+	StudentId openapi_types.UUID `json:"studentId"`
+}
+
+type ListStudentCardsResponseObject interface {
+	VisitListStudentCardsResponse(w http.ResponseWriter) error
+}
+
+type ListStudentCards200JSONResponse StudentCardList
+
+func (response ListStudentCards200JSONResponse) VisitListStudentCardsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListStudentCards400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response ListStudentCards400JSONResponse) VisitListStudentCardsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListStudentCards401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ListStudentCards401JSONResponse) VisitListStudentCardsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListStudentCards403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListStudentCards403JSONResponse) VisitListStudentCardsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListStudentCards404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListStudentCards404JSONResponse) VisitListStudentCardsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListStudentCards500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListStudentCards500JSONResponse) VisitListStudentCardsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type IssueStudentCardRequestObject struct {
+	StudentId openapi_types.UUID `json:"studentId"`
+	Params    IssueStudentCardParams
+}
+
+type IssueStudentCardResponseObject interface {
+	VisitIssueStudentCardResponse(w http.ResponseWriter) error
+}
+
+type IssueStudentCard201JSONResponse StudentCard
+
+func (response IssueStudentCard201JSONResponse) VisitIssueStudentCardResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type IssueStudentCard400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response IssueStudentCard400JSONResponse) VisitIssueStudentCardResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type IssueStudentCard401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response IssueStudentCard401JSONResponse) VisitIssueStudentCardResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type IssueStudentCard403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response IssueStudentCard403JSONResponse) VisitIssueStudentCardResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type IssueStudentCard404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response IssueStudentCard404JSONResponse) VisitIssueStudentCardResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type IssueStudentCard422JSONResponse struct{ KeyReusedJSONResponse }
+
+func (response IssueStudentCard422JSONResponse) VisitIssueStudentCardResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type IssueStudentCard500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response IssueStudentCard500JSONResponse) VisitIssueStudentCardResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -10495,9 +11539,15 @@ type StrictServerInterface interface {
 	// ListAbsentToday Students marked absent on a date, with a contact to call
 	// (GET /api/v1/attendance/absent)
 	ListAbsentToday(ctx context.Context, request ListAbsentTodayRequestObject) (ListAbsentTodayResponseObject, error)
+	// ListGateScans The gate scans of a day
+	// (GET /api/v1/attendance/gate-scans)
+	ListGateScans(ctx context.Context, request ListGateScansRequestObject) (ListGateScansResponseObject, error)
 	// ListLowAttendance Students whose attendance is below a threshold over a period
 	// (GET /api/v1/attendance/low)
 	ListLowAttendance(ctx context.Context, request ListLowAttendanceRequestObject) (ListLowAttendanceResponseObject, error)
+	// ListAttendanceMismatches Where the gate and the class register disagree
+	// (GET /api/v1/attendance/mismatches)
+	ListAttendanceMismatches(ctx context.Context, request ListAttendanceMismatchesRequestObject) (ListAttendanceMismatchesResponseObject, error)
 	// ListMissingRegisters Sections with no submitted register once the due time has passed
 	// (GET /api/v1/attendance/missing-registers)
 	ListMissingRegisters(ctx context.Context, request ListMissingRegistersRequestObject) (ListMissingRegistersResponseObject, error)
@@ -10519,6 +11569,9 @@ type StrictServerInterface interface {
 	// SubmitRegister Submit the register
 	// (POST /api/v1/attendance/registers/{registerId}/submit)
 	SubmitRegister(ctx context.Context, request SubmitRegisterRequestObject) (SubmitRegisterResponseObject, error)
+	// ScanCard Record a student's arrival from a scanned card
+	// (POST /api/v1/attendance/scan)
+	ScanCard(ctx context.Context, request ScanCardRequestObject) (ScanCardResponseObject, error)
 	// GetAttendanceSettings The school's attendance settings
 	// (GET /api/v1/attendance/settings)
 	GetAttendanceSettings(ctx context.Context, request GetAttendanceSettingsRequestObject) (GetAttendanceSettingsResponseObject, error)
@@ -10660,6 +11713,9 @@ type StrictServerInterface interface {
 	// RevokeRole Take a role away from a staff member
 	// (POST /api/v1/staff/{staffId}/roles/{role}/revoke)
 	RevokeRole(ctx context.Context, request RevokeRoleRequestObject) (RevokeRoleResponseObject, error)
+	// DisableStudentCard Disable a card (lost, stolen, replaced)
+	// (POST /api/v1/student-cards/{cardId}/disable)
+	DisableStudentCard(ctx context.Context, request DisableStudentCardRequestObject) (DisableStudentCardResponseObject, error)
 	// ListStudents List students in the caller's tenant (cursor paginated)
 	// (GET /api/v1/students)
 	ListStudents(ctx context.Context, request ListStudentsRequestObject) (ListStudentsResponseObject, error)
@@ -10672,6 +11728,12 @@ type StrictServerInterface interface {
 	// GetStudentAttendance One student's attendance over a period
 	// (GET /api/v1/students/{studentId}/attendance)
 	GetStudentAttendance(ctx context.Context, request GetStudentAttendanceRequestObject) (GetStudentAttendanceResponseObject, error)
+	// ListStudentCards The student's cards, newest first
+	// (GET /api/v1/students/{studentId}/cards)
+	ListStudentCards(ctx context.Context, request ListStudentCardsRequestObject) (ListStudentCardsResponseObject, error)
+	// IssueStudentCard Issue the student's ID card
+	// (POST /api/v1/students/{studentId}/cards)
+	IssueStudentCard(ctx context.Context, request IssueStudentCardRequestObject) (IssueStudentCardResponseObject, error)
 	// ChangeStudentSection Move a student to another section, keeping history
 	// (POST /api/v1/students/{studentId}/change-section)
 	ChangeStudentSection(ctx context.Context, request ChangeStudentSectionRequestObject) (ChangeStudentSectionResponseObject, error)
@@ -10784,6 +11846,32 @@ func (sh *strictHandler) ListAbsentToday(w http.ResponseWriter, r *http.Request,
 	}
 }
 
+// ListGateScans operation middleware
+func (sh *strictHandler) ListGateScans(w http.ResponseWriter, r *http.Request, params ListGateScansParams) {
+	var request ListGateScansRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListGateScans(ctx, request.(ListGateScansRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListGateScans")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListGateScansResponseObject); ok {
+		if err := validResponse.VisitListGateScansResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListLowAttendance operation middleware
 func (sh *strictHandler) ListLowAttendance(w http.ResponseWriter, r *http.Request, params ListLowAttendanceParams) {
 	var request ListLowAttendanceRequestObject
@@ -10803,6 +11891,32 @@ func (sh *strictHandler) ListLowAttendance(w http.ResponseWriter, r *http.Reques
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListLowAttendanceResponseObject); ok {
 		if err := validResponse.VisitListLowAttendanceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListAttendanceMismatches operation middleware
+func (sh *strictHandler) ListAttendanceMismatches(w http.ResponseWriter, r *http.Request, params ListAttendanceMismatchesParams) {
+	var request ListAttendanceMismatchesRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListAttendanceMismatches(ctx, request.(ListAttendanceMismatchesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListAttendanceMismatches")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListAttendanceMismatchesResponseObject); ok {
+		if err := validResponse.VisitListAttendanceMismatchesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -11004,6 +12118,37 @@ func (sh *strictHandler) SubmitRegister(w http.ResponseWriter, r *http.Request, 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(SubmitRegisterResponseObject); ok {
 		if err := validResponse.VisitSubmitRegisterResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ScanCard operation middleware
+func (sh *strictHandler) ScanCard(w http.ResponseWriter, r *http.Request) {
+	var request ScanCardRequestObject
+
+	var body ScanCardJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ScanCard(ctx, request.(ScanCardRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ScanCard")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ScanCardResponseObject); ok {
+		if err := validResponse.VisitScanCardResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -12336,6 +13481,39 @@ func (sh *strictHandler) RevokeRole(w http.ResponseWriter, r *http.Request, staf
 	}
 }
 
+// DisableStudentCard operation middleware
+func (sh *strictHandler) DisableStudentCard(w http.ResponseWriter, r *http.Request, cardId openapi_types.UUID) {
+	var request DisableStudentCardRequestObject
+
+	request.CardId = cardId
+
+	var body DisableStudentCardJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DisableStudentCard(ctx, request.(DisableStudentCardRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DisableStudentCard")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DisableStudentCardResponseObject); ok {
+		if err := validResponse.VisitDisableStudentCardResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListStudents operation middleware
 func (sh *strictHandler) ListStudents(w http.ResponseWriter, r *http.Request, params ListStudentsParams) {
 	var request ListStudentsRequestObject
@@ -12441,6 +13619,59 @@ func (sh *strictHandler) GetStudentAttendance(w http.ResponseWriter, r *http.Req
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetStudentAttendanceResponseObject); ok {
 		if err := validResponse.VisitGetStudentAttendanceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListStudentCards operation middleware
+func (sh *strictHandler) ListStudentCards(w http.ResponseWriter, r *http.Request, studentId openapi_types.UUID) {
+	var request ListStudentCardsRequestObject
+
+	request.StudentId = studentId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListStudentCards(ctx, request.(ListStudentCardsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListStudentCards")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListStudentCardsResponseObject); ok {
+		if err := validResponse.VisitListStudentCardsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// IssueStudentCard operation middleware
+func (sh *strictHandler) IssueStudentCard(w http.ResponseWriter, r *http.Request, studentId openapi_types.UUID, params IssueStudentCardParams) {
+	var request IssueStudentCardRequestObject
+
+	request.StudentId = studentId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.IssueStudentCard(ctx, request.(IssueStudentCardRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "IssueStudentCard")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(IssueStudentCardResponseObject); ok {
+		if err := validResponse.VisitIssueStudentCardResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

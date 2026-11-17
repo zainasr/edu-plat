@@ -56,6 +56,46 @@ func (q *Queries) AbsentOnDay(ctx context.Context, arg AbsentOnDayParams) ([]Abs
 	return items, nil
 }
 
+const arrivalsOnDay = `-- name: ArrivalsOnDay :many
+SELECT DISTINCT ON (student_id) student_id, scanned_at, status
+FROM gate_scans
+WHERE tenant_id = $1 AND day = $2 AND student_id = ANY($3::uuid[])
+ORDER BY student_id, scanned_at, id
+`
+
+type ArrivalsOnDayParams struct {
+	TenantID   pgtype.UUID
+	Day        pgtype.Date
+	StudentIds []pgtype.UUID
+}
+
+type ArrivalsOnDayRow struct {
+	StudentID pgtype.UUID
+	ScannedAt pgtype.Timestamptz
+	Status    string
+}
+
+// Each given student's first scan of the day.
+func (q *Queries) ArrivalsOnDay(ctx context.Context, arg ArrivalsOnDayParams) ([]ArrivalsOnDayRow, error) {
+	rows, err := q.db.Query(ctx, arrivalsOnDay, arg.TenantID, arg.Day, arg.StudentIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ArrivalsOnDayRow
+	for rows.Next() {
+		var i ArrivalsOnDayRow
+		if err := rows.Scan(&i.StudentID, &i.ScannedAt, &i.Status); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const countedElsewhere = `-- name: CountedElsewhere :many
 SELECT DISTINCT cur.student_id
 FROM (
@@ -156,6 +196,122 @@ func (q *Queries) CurrentRecords(ctx context.Context, arg CurrentRecordsParams) 
 	return items, nil
 }
 
+const disableActiveCards = `-- name: DisableActiveCards :execrows
+
+UPDATE student_cards
+SET status = 'disabled', disabled_at = now(), disabled_by = $1, disabled_reason = $2
+WHERE tenant_id = $3 AND student_id = $4 AND status = 'active'
+`
+
+type DisableActiveCardsParams struct {
+	DisabledBy pgtype.UUID
+	Reason     pgtype.Text
+	TenantID   pgtype.UUID
+	StudentID  pgtype.UUID
+}
+
+// ---- cards and the gate scan (slice 6b) -----------------------------------------------
+// Issuing a new card disables the student's current one first (one active card per student).
+func (q *Queries) DisableActiveCards(ctx context.Context, arg DisableActiveCardsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, disableActiveCards,
+		arg.DisabledBy,
+		arg.Reason,
+		arg.TenantID,
+		arg.StudentID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const disableCard = `-- name: DisableCard :execrows
+UPDATE student_cards
+SET status = 'disabled', disabled_at = now(), disabled_by = $1, disabled_reason = $2
+WHERE tenant_id = $3 AND id = $4 AND status = 'active'
+`
+
+type DisableCardParams struct {
+	DisabledBy pgtype.UUID
+	Reason     pgtype.Text
+	TenantID   pgtype.UUID
+	ID         pgtype.UUID
+}
+
+func (q *Queries) DisableCard(ctx context.Context, arg DisableCardParams) (int64, error) {
+	result, err := q.db.Exec(ctx, disableCard,
+		arg.DisabledBy,
+		arg.Reason,
+		arg.TenantID,
+		arg.ID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const firstScanOfDay = `-- name: FirstScanOfDay :one
+SELECT scanned_at, status
+FROM gate_scans
+WHERE tenant_id = $1 AND student_id = $2 AND day = $3
+ORDER BY scanned_at, id
+LIMIT 1
+`
+
+type FirstScanOfDayParams struct {
+	TenantID  pgtype.UUID
+	StudentID pgtype.UUID
+	Day       pgtype.Date
+}
+
+type FirstScanOfDayRow struct {
+	ScannedAt pgtype.Timestamptz
+	Status    string
+}
+
+// A student's arrival: their earliest scan of the day.
+func (q *Queries) FirstScanOfDay(ctx context.Context, arg FirstScanOfDayParams) (FirstScanOfDayRow, error) {
+	row := q.db.QueryRow(ctx, firstScanOfDay, arg.TenantID, arg.StudentID, arg.Day)
+	var i FirstScanOfDayRow
+	err := row.Scan(&i.ScannedAt, &i.Status)
+	return i, err
+}
+
+const getCard = `-- name: GetCard :one
+SELECT id, student_id, status, issued_at, disabled_at, disabled_reason
+FROM student_cards
+WHERE tenant_id = $1 AND id = $2
+`
+
+type GetCardParams struct {
+	TenantID pgtype.UUID
+	ID       pgtype.UUID
+}
+
+type GetCardRow struct {
+	ID             pgtype.UUID
+	StudentID      pgtype.UUID
+	Status         string
+	IssuedAt       pgtype.Timestamptz
+	DisabledAt     pgtype.Timestamptz
+	DisabledReason pgtype.Text
+}
+
+func (q *Queries) GetCard(ctx context.Context, arg GetCardParams) (GetCardRow, error) {
+	row := q.db.QueryRow(ctx, getCard, arg.TenantID, arg.ID)
+	var i GetCardRow
+	err := row.Scan(
+		&i.ID,
+		&i.StudentID,
+		&i.Status,
+		&i.IssuedAt,
+		&i.DisabledAt,
+		&i.DisabledReason,
+	)
+	return i, err
+}
+
 const getRegister = `-- name: GetRegister :one
 SELECT id, section_id, day, status, submitted_at
 FROM attendance_registers
@@ -189,7 +345,7 @@ func (q *Queries) GetRegister(ctx context.Context, arg GetRegisterParams) (GetRe
 }
 
 const getSettings = `-- name: GetSettings :one
-SELECT register_due_time, edit_window_days, low_attendance_percent
+SELECT register_due_time, edit_window_days, low_attendance_percent, morning_start, evening_start, late_after_minutes
 FROM attendance_settings
 WHERE tenant_id = $1
 `
@@ -198,12 +354,46 @@ type GetSettingsRow struct {
 	RegisterDueTime      pgtype.Time
 	EditWindowDays       int32
 	LowAttendancePercent int32
+	MorningStart         pgtype.Time
+	EveningStart         pgtype.Time
+	LateAfterMinutes     int32
 }
 
 func (q *Queries) GetSettings(ctx context.Context, tenantID pgtype.UUID) (GetSettingsRow, error) {
 	row := q.db.QueryRow(ctx, getSettings, tenantID)
 	var i GetSettingsRow
-	err := row.Scan(&i.RegisterDueTime, &i.EditWindowDays, &i.LowAttendancePercent)
+	err := row.Scan(
+		&i.RegisterDueTime,
+		&i.EditWindowDays,
+		&i.LowAttendancePercent,
+		&i.MorningStart,
+		&i.EveningStart,
+		&i.LateAfterMinutes,
+	)
+	return i, err
+}
+
+const insertCard = `-- name: InsertCard :one
+INSERT INTO student_cards (tenant_id, student_id, issued_by)
+VALUES ($1, $2, $3)
+RETURNING id, issued_at
+`
+
+type InsertCardParams struct {
+	TenantID  pgtype.UUID
+	StudentID pgtype.UUID
+	IssuedBy  pgtype.UUID
+}
+
+type InsertCardRow struct {
+	ID       pgtype.UUID
+	IssuedAt pgtype.Timestamptz
+}
+
+func (q *Queries) InsertCard(ctx context.Context, arg InsertCardParams) (InsertCardRow, error) {
+	row := q.db.QueryRow(ctx, insertCard, arg.TenantID, arg.StudentID, arg.IssuedBy)
+	var i InsertCardRow
+	err := row.Scan(&i.ID, &i.IssuedAt)
 	return i, err
 }
 
@@ -265,6 +455,90 @@ func (q *Queries) InsertRegister(ctx context.Context, arg InsertRegisterParams) 
 	return id, err
 }
 
+const insertScan = `-- name: InsertScan :one
+INSERT INTO gate_scans (tenant_id, student_id, card_id, section_id, day, scanned_at, status, scanned_by, client_scan_id)
+VALUES ($1, $2, $3, $4, $5,
+        $6, $7, $8, $9)
+RETURNING id
+`
+
+type InsertScanParams struct {
+	TenantID     pgtype.UUID
+	StudentID    pgtype.UUID
+	CardID       pgtype.UUID
+	SectionID    pgtype.UUID
+	Day          pgtype.Date
+	ScannedAt    pgtype.Timestamptz
+	Status       string
+	ScannedBy    pgtype.UUID
+	ClientScanID pgtype.UUID
+}
+
+func (q *Queries) InsertScan(ctx context.Context, arg InsertScanParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, insertScan,
+		arg.TenantID,
+		arg.StudentID,
+		arg.CardID,
+		arg.SectionID,
+		arg.Day,
+		arg.ScannedAt,
+		arg.Status,
+		arg.ScannedBy,
+		arg.ClientScanID,
+	)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
+const listCardsForStudent = `-- name: ListCardsForStudent :many
+SELECT id, student_id, status, issued_at, disabled_at, disabled_reason
+FROM student_cards
+WHERE tenant_id = $1 AND student_id = $2
+ORDER BY issued_at DESC, id DESC
+`
+
+type ListCardsForStudentParams struct {
+	TenantID  pgtype.UUID
+	StudentID pgtype.UUID
+}
+
+type ListCardsForStudentRow struct {
+	ID             pgtype.UUID
+	StudentID      pgtype.UUID
+	Status         string
+	IssuedAt       pgtype.Timestamptz
+	DisabledAt     pgtype.Timestamptz
+	DisabledReason pgtype.Text
+}
+
+func (q *Queries) ListCardsForStudent(ctx context.Context, arg ListCardsForStudentParams) ([]ListCardsForStudentRow, error) {
+	rows, err := q.db.Query(ctx, listCardsForStudent, arg.TenantID, arg.StudentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListCardsForStudentRow
+	for rows.Next() {
+		var i ListCardsForStudentRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.StudentID,
+			&i.Status,
+			&i.IssuedAt,
+			&i.DisabledAt,
+			&i.DisabledReason,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRegistersForDay = `-- name: ListRegistersForDay :many
 SELECT id, section_id, day, status, submitted_at
 FROM attendance_registers
@@ -311,6 +585,77 @@ func (q *Queries) ListRegistersForDay(ctx context.Context, arg ListRegistersForD
 	return items, nil
 }
 
+const listScansForDay = `-- name: ListScansForDay :many
+SELECT id, student_id, section_id, scanned_at, status
+FROM gate_scans
+WHERE tenant_id = $1 AND day = $2
+ORDER BY scanned_at, id
+`
+
+type ListScansForDayParams struct {
+	TenantID pgtype.UUID
+	Day      pgtype.Date
+}
+
+type ListScansForDayRow struct {
+	ID        pgtype.UUID
+	StudentID pgtype.UUID
+	SectionID pgtype.UUID
+	ScannedAt pgtype.Timestamptz
+	Status    string
+}
+
+func (q *Queries) ListScansForDay(ctx context.Context, arg ListScansForDayParams) ([]ListScansForDayRow, error) {
+	rows, err := q.db.Query(ctx, listScansForDay, arg.TenantID, arg.Day)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListScansForDayRow
+	for rows.Next() {
+		var i ListScansForDayRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.StudentID,
+			&i.SectionID,
+			&i.ScannedAt,
+			&i.Status,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const lockCard = `-- name: LockCard :one
+SELECT id, student_id, status
+FROM student_cards
+WHERE tenant_id = $1 AND id = $2
+FOR UPDATE
+`
+
+type LockCardParams struct {
+	TenantID pgtype.UUID
+	ID       pgtype.UUID
+}
+
+type LockCardRow struct {
+	ID        pgtype.UUID
+	StudentID pgtype.UUID
+	Status    string
+}
+
+func (q *Queries) LockCard(ctx context.Context, arg LockCardParams) (LockCardRow, error) {
+	row := q.db.QueryRow(ctx, lockCard, arg.TenantID, arg.ID)
+	var i LockCardRow
+	err := row.Scan(&i.ID, &i.StudentID, &i.Status)
+	return i, err
+}
+
 const lockRegister = `-- name: LockRegister :one
 SELECT id, section_id, day, status, submitted_at
 FROM attendance_registers
@@ -343,6 +688,97 @@ func (q *Queries) LockRegister(ctx context.Context, arg LockRegisterParams) (Loc
 		&i.SubmittedAt,
 	)
 	return i, err
+}
+
+const lockScanKey = `-- name: LockScanKey :exec
+SELECT pg_advisory_xact_lock(hashtextextended('gate-scan:' || $1::text || ':' || $2::text, 0))
+`
+
+type LockScanKeyParams struct {
+	StudentID string
+	Day       string
+}
+
+// One lock per student and day, so a double tap at the gate cannot record two arrivals.
+func (q *Queries) LockScanKey(ctx context.Context, arg LockScanKeyParams) error {
+	_, err := q.db.Exec(ctx, lockScanKey, arg.StudentID, arg.Day)
+	return err
+}
+
+const mismatchesOnDay = `-- name: MismatchesOnDay :many
+WITH cur AS (
+    SELECT DISTINCT ON (r.register_id, r.student_id) r.student_id, r.status, g.section_id
+    FROM attendance_records r
+    JOIN attendance_registers g ON g.tenant_id = r.tenant_id AND g.id = r.register_id
+    WHERE r.tenant_id = $1 AND g.status = 'submitted' AND g.day = $2
+    ORDER BY r.register_id, r.student_id, r.version DESC
+), arrivals AS (
+    SELECT DISTINCT ON (student_id) student_id, scanned_at
+    FROM gate_scans
+    WHERE tenant_id = $1 AND day = $2
+    ORDER BY student_id, scanned_at, id
+), scanned_sections AS (
+    -- A section "uses the gate" if a student who is counted in its register was scanned in it. A student who
+    -- was scanned and then moved (recorded as left) does not make their old section look scanned.
+    SELECT DISTINCT s.section_id
+    FROM gate_scans s
+    JOIN cur ON cur.student_id = s.student_id AND cur.section_id = s.section_id AND cur.status <> 'left'
+    WHERE s.tenant_id = $1 AND s.day = $2
+)
+SELECT m.student_id, m.section_id, m.status, m.kind, m.gate_arrived_at
+FROM (
+    SELECT cur.student_id, cur.section_id, cur.status, a.scanned_at AS gate_arrived_at,
+           CASE
+               WHEN a.scanned_at IS NOT NULL AND cur.status = 'absent' THEN 'scanned_but_absent'
+               WHEN a.scanned_at IS NULL AND cur.status IN ('present', 'late')
+                    AND cur.section_id IN (SELECT section_id FROM scanned_sections) THEN 'present_but_not_scanned'
+           END::text AS kind
+    FROM cur
+    LEFT JOIN arrivals a ON a.student_id = cur.student_id
+) m
+WHERE m.kind IS NOT NULL
+ORDER BY m.section_id, m.kind, m.student_id
+`
+
+type MismatchesOnDayParams struct {
+	TenantID pgtype.UUID
+	Day      pgtype.Date
+}
+
+type MismatchesOnDayRow struct {
+	StudentID     pgtype.UUID
+	SectionID     pgtype.UUID
+	Status        string
+	Kind          string
+	GateArrivedAt pgtype.Timestamptz
+}
+
+// Gate against class, from submitted registers only. A student scanned but marked absent; or marked
+// present or late but never scanned, in a section that had at least one scan that day.
+func (q *Queries) MismatchesOnDay(ctx context.Context, arg MismatchesOnDayParams) ([]MismatchesOnDayRow, error) {
+	rows, err := q.db.Query(ctx, mismatchesOnDay, arg.TenantID, arg.Day)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MismatchesOnDayRow
+	for rows.Next() {
+		var i MismatchesOnDayRow
+		if err := rows.Scan(
+			&i.StudentID,
+			&i.SectionID,
+			&i.Status,
+			&i.Kind,
+			&i.GateArrivedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const registerBySectionDay = `-- name: RegisterBySectionDay :one
@@ -378,13 +814,84 @@ func (q *Queries) RegisterBySectionDay(ctx context.Context, arg RegisterBySectio
 	return i, err
 }
 
+const scanByClientID = `-- name: ScanByClientID :one
+SELECT id, student_id, card_id, section_id, scanned_at, status
+FROM gate_scans
+WHERE tenant_id = $1 AND client_scan_id = $2
+`
+
+type ScanByClientIDParams struct {
+	TenantID     pgtype.UUID
+	ClientScanID pgtype.UUID
+}
+
+type ScanByClientIDRow struct {
+	ID        pgtype.UUID
+	StudentID pgtype.UUID
+	CardID    pgtype.UUID
+	SectionID pgtype.UUID
+	ScannedAt pgtype.Timestamptz
+	Status    string
+}
+
+func (q *Queries) ScanByClientID(ctx context.Context, arg ScanByClientIDParams) (ScanByClientIDRow, error) {
+	row := q.db.QueryRow(ctx, scanByClientID, arg.TenantID, arg.ClientScanID)
+	var i ScanByClientIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.StudentID,
+		&i.CardID,
+		&i.SectionID,
+		&i.ScannedAt,
+		&i.Status,
+	)
+	return i, err
+}
+
+const scanTimesForStudentDay = `-- name: ScanTimesForStudentDay :many
+SELECT scanned_at
+FROM gate_scans
+WHERE tenant_id = $1 AND student_id = $2 AND day = $3
+ORDER BY scanned_at
+`
+
+type ScanTimesForStudentDayParams struct {
+	TenantID  pgtype.UUID
+	StudentID pgtype.UUID
+	Day       pgtype.Date
+}
+
+func (q *Queries) ScanTimesForStudentDay(ctx context.Context, arg ScanTimesForStudentDayParams) ([]pgtype.Timestamptz, error) {
+	rows, err := q.db.Query(ctx, scanTimesForStudentDay, arg.TenantID, arg.StudentID, arg.Day)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []pgtype.Timestamptz
+	for rows.Next() {
+		var scanned_at pgtype.Timestamptz
+		if err := rows.Scan(&scanned_at); err != nil {
+			return nil, err
+		}
+		items = append(items, scanned_at)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setSettings = `-- name: SetSettings :exec
-INSERT INTO attendance_settings (tenant_id, register_due_time, edit_window_days, low_attendance_percent, updated_by)
+INSERT INTO attendance_settings (tenant_id, register_due_time, edit_window_days, low_attendance_percent,
+                                 morning_start, evening_start, late_after_minutes, updated_by)
 VALUES ($1, $2::time, $3,
-        $4, $5)
+        $4, $5::time, $6::time,
+        $7, $8)
 ON CONFLICT (tenant_id) DO UPDATE
 SET register_due_time = EXCLUDED.register_due_time, edit_window_days = EXCLUDED.edit_window_days,
-    low_attendance_percent = EXCLUDED.low_attendance_percent, updated_at = now(), updated_by = EXCLUDED.updated_by
+    low_attendance_percent = EXCLUDED.low_attendance_percent, morning_start = EXCLUDED.morning_start,
+    evening_start = EXCLUDED.evening_start, late_after_minutes = EXCLUDED.late_after_minutes,
+    updated_at = now(), updated_by = EXCLUDED.updated_by
 `
 
 type SetSettingsParams struct {
@@ -392,6 +899,9 @@ type SetSettingsParams struct {
 	RegisterDueTime      pgtype.Time
 	EditWindowDays       int32
 	LowAttendancePercent int32
+	MorningStart         pgtype.Time
+	EveningStart         pgtype.Time
+	LateAfterMinutes     int32
 	UpdatedBy            pgtype.UUID
 }
 
@@ -402,9 +912,49 @@ func (q *Queries) SetSettings(ctx context.Context, arg SetSettingsParams) error 
 		arg.RegisterDueTime,
 		arg.EditWindowDays,
 		arg.LowAttendancePercent,
+		arg.MorningStart,
+		arg.EveningStart,
+		arg.LateAfterMinutes,
 		arg.UpdatedBy,
 	)
 	return err
+}
+
+const shareCard = `-- name: ShareCard :one
+SELECT id, student_id, status, issued_at, disabled_at, disabled_reason
+FROM student_cards
+WHERE tenant_id = $1 AND id = $2
+FOR SHARE
+`
+
+type ShareCardParams struct {
+	TenantID pgtype.UUID
+	ID       pgtype.UUID
+}
+
+type ShareCardRow struct {
+	ID             pgtype.UUID
+	StudentID      pgtype.UUID
+	Status         string
+	IssuedAt       pgtype.Timestamptz
+	DisabledAt     pgtype.Timestamptz
+	DisabledReason pgtype.Text
+}
+
+// FOR SHARE: a scan holds the card until it commits, so disabling it (FOR UPDATE) waits for scans in flight
+// and every scan that commits before the disable returns was made while the card was still active.
+func (q *Queries) ShareCard(ctx context.Context, arg ShareCardParams) (ShareCardRow, error) {
+	row := q.db.QueryRow(ctx, shareCard, arg.TenantID, arg.ID)
+	var i ShareCardRow
+	err := row.Scan(
+		&i.ID,
+		&i.StudentID,
+		&i.Status,
+		&i.IssuedAt,
+		&i.DisabledAt,
+		&i.DisabledReason,
+	)
+	return i, err
 }
 
 const studentDays = `-- name: StudentDays :many

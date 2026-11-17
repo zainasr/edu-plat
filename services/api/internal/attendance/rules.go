@@ -54,6 +54,9 @@ type SettingsInput struct {
 	RegisterDueTime      string // HH:MM
 	EditWindowDays       int
 	LowAttendancePercent int
+	MorningStart         string // HH:MM, when the morning shift starts
+	EveningStart         string // HH:MM, when the evening shift starts
+	LateAfterMinutes     int    // a scan later than start + this is late
 }
 
 // ParsedSettings is SettingsInput after checking.
@@ -61,6 +64,9 @@ type ParsedSettings struct {
 	DueHour, DueMinute   int
 	EditWindowDays       int
 	LowAttendancePercent int
+	MorningStartMin      int // minutes after midnight
+	EveningStartMin      int
+	LateAfterMinutes     int
 }
 
 type fieldErrors []apperr.Field
@@ -208,27 +214,48 @@ func registerOverdue(now, date, due time.Time) bool {
 	return now.Hour()*60+now.Minute() >= due.Hour()*60+due.Minute()
 }
 
+// parseClock reads HH:MM.
+func parseClock(v string) (hour, minute int, ok bool) {
+	parts := strings.Split(v, ":")
+	if len(parts) != 2 {
+		return 0, 0, false
+	}
+	h, errH := strconv.Atoi(parts[0])
+	m, errM := strconv.Atoi(parts[1])
+	if errH != nil || errM != nil || h < 0 || h > 23 || m < 0 || m > 59 {
+		return 0, 0, false
+	}
+	return h, m, true
+}
+
 func validateSettings(in SettingsInput) (ParsedSettings, error) {
 	var f fieldErrors
 	var out ParsedSettings
-	parts := strings.Split(in.RegisterDueTime, ":")
-	h, errH := 0, error(nil)
-	m, errM := 0, error(nil)
-	if len(parts) == 2 {
-		h, errH = strconv.Atoi(parts[0])
-		m, errM = strconv.Atoi(parts[1])
-	}
-	if len(parts) != 2 || errH != nil || errM != nil || h < 0 || h > 23 || m < 0 || m > 59 {
+	if h, m, ok := parseClock(in.RegisterDueTime); ok {
+		out.DueHour, out.DueMinute = h, m
+	} else {
 		f.add("register_due_time", "Use HH:MM, such as 10:00.")
 	}
-	out.DueHour, out.DueMinute = h, m
 	if in.EditWindowDays < minWindowDays || in.EditWindowDays > maxWindowDays {
 		f.add("edit_window_days", "Between 1 and 90.")
 	}
 	if in.LowAttendancePercent < 1 || in.LowAttendancePercent > 100 {
 		f.add("low_attendance_percent", "Between 1 and 100.")
 	}
-	out.EditWindowDays, out.LowAttendancePercent = in.EditWindowDays, in.LowAttendancePercent
+	if h, m, ok := parseClock(in.MorningStart); ok {
+		out.MorningStartMin = h*60 + m
+	} else {
+		f.add("morning_start", "Use HH:MM, such as 08:00.")
+	}
+	if h, m, ok := parseClock(in.EveningStart); ok {
+		out.EveningStartMin = h*60 + m
+	} else {
+		f.add("evening_start", "Use HH:MM, such as 13:00.")
+	}
+	if in.LateAfterMinutes < 0 || in.LateAfterMinutes > 120 {
+		f.add("late_after_minutes", "Between 0 and 120.")
+	}
+	out.EditWindowDays, out.LowAttendancePercent, out.LateAfterMinutes = in.EditWindowDays, in.LowAttendancePercent, in.LateAfterMinutes
 	return out, f.err("attendance.settings_invalid")
 }
 

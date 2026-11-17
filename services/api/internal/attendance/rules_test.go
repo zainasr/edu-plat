@@ -204,17 +204,17 @@ func TestREQ_ATT_016_RegisterOverdue(t *testing.T) {
 }
 
 func TestREQ_ATT_ValidateSettings(t *testing.T) {
-	got, err := validateSettings(SettingsInput{RegisterDueTime: "09:30", EditWindowDays: 14, LowAttendancePercent: 80})
+	got, err := validateSettings(SettingsInput{RegisterDueTime: "09:30", EditWindowDays: 14, LowAttendancePercent: 80, MorningStart: "08:00", EveningStart: "13:00", LateAfterMinutes: 10})
 	if err != nil || got.DueHour != 9 || got.DueMinute != 30 {
 		t.Fatalf("good: %+v %v", got, err)
 	}
 	for name, in := range map[string]SettingsInput{
-		"bad time":      {RegisterDueTime: "25:00", EditWindowDays: 7, LowAttendancePercent: 75},
-		"not a time":    {RegisterDueTime: "late", EditWindowDays: 7, LowAttendancePercent: 75},
-		"window 0":      {RegisterDueTime: "10:00", EditWindowDays: 0, LowAttendancePercent: 75},
-		"window 91":     {RegisterDueTime: "10:00", EditWindowDays: 91, LowAttendancePercent: 75},
-		"threshold 0":   {RegisterDueTime: "10:00", EditWindowDays: 7, LowAttendancePercent: 0},
-		"threshold 101": {RegisterDueTime: "10:00", EditWindowDays: 7, LowAttendancePercent: 101},
+		"bad time":      {RegisterDueTime: "25:00", EditWindowDays: 7, LowAttendancePercent: 75, MorningStart: "08:00", EveningStart: "13:00", LateAfterMinutes: 10},
+		"not a time":    {RegisterDueTime: "late", EditWindowDays: 7, LowAttendancePercent: 75, MorningStart: "08:00", EveningStart: "13:00", LateAfterMinutes: 10},
+		"window 0":      {RegisterDueTime: "10:00", EditWindowDays: 0, LowAttendancePercent: 75, MorningStart: "08:00", EveningStart: "13:00", LateAfterMinutes: 10},
+		"window 91":     {RegisterDueTime: "10:00", EditWindowDays: 91, LowAttendancePercent: 75, MorningStart: "08:00", EveningStart: "13:00", LateAfterMinutes: 10},
+		"threshold 0":   {RegisterDueTime: "10:00", EditWindowDays: 7, LowAttendancePercent: 0, MorningStart: "08:00", EveningStart: "13:00", LateAfterMinutes: 10},
+		"threshold 101": {RegisterDueTime: "10:00", EditWindowDays: 7, LowAttendancePercent: 101, MorningStart: "08:00", EveningStart: "13:00", LateAfterMinutes: 10},
 	} {
 		if _, err := validateSettings(in); err == nil || code(t, err) != "attendance.settings_invalid" {
 			t.Fatalf("%s must be refused: %v", name, err)
@@ -224,7 +224,7 @@ func TestREQ_ATT_ValidateSettings(t *testing.T) {
 		_, e := validateSettings(SettingsInput{RegisterDueTime: "x", EditWindowDays: 0, LowAttendancePercent: 0})
 		return e
 	}()),
-		[]string{"register_due_time", "edit_window_days", "low_attendance_percent"}) {
+		[]string{"register_due_time", "edit_window_days", "low_attendance_percent", "morning_start", "evening_start"}) {
 		t.Fatal("all three problems are reported together")
 	}
 }

@@ -148,3 +148,12 @@ FROM guardian_links l
 JOIN guardians g ON g.tenant_id = l.tenant_id AND g.id = l.guardian_id
 WHERE l.tenant_id = sqlc.arg('tenant_id') AND l.student_id = ANY(sqlc.arg('student_ids')::uuid[])
 ORDER BY l.student_id, l.is_primary DESC, l.is_fee_payer DESC, g.full_name;
+
+-- name: SectionOnDay :one
+-- The section a student was enrolled in on a date (see SectionRoster for the date rule).
+SELECT section_id
+FROM enrolments
+WHERE tenant_id = sqlc.arg('tenant_id') AND student_id = sqlc.arg('student_id')
+  AND started_on <= sqlc.arg('on_day')::date AND (ended_on IS NULL OR ended_on > sqlc.arg('on_day')::date)
+ORDER BY started_on DESC, created_at DESC
+LIMIT 1;

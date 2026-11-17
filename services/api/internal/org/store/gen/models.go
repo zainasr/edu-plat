@@ -86,6 +86,9 @@ type AttendanceSetting struct {
 	LowAttendancePercent int32
 	UpdatedAt            pgtype.Timestamptz
 	UpdatedBy            pgtype.UUID
+	MorningStart         pgtype.Time
+	EveningStart         pgtype.Time
+	LateAfterMinutes     int32
 }
 
 type AuditLog struct {
@@ -218,6 +221,20 @@ type FeeType struct {
 	Status    string
 	CreatedAt pgtype.Timestamptz
 	CreatedBy pgtype.UUID
+}
+
+type GateScan struct {
+	ID           pgtype.UUID
+	TenantID     pgtype.UUID
+	StudentID    pgtype.UUID
+	CardID       pgtype.UUID
+	SectionID    pgtype.UUID
+	Day          pgtype.Date
+	ScannedAt    pgtype.Timestamptz
+	Status       string
+	ScannedBy    pgtype.UUID
+	ClientScanID pgtype.UUID
+	CreatedAt    pgtype.Timestamptz
 }
 
 type Guardian struct {
@@ -381,6 +398,18 @@ type Student struct {
 	CreatedBy      pgtype.UUID
 	UpdatedAt      pgtype.Timestamptz
 	UpdatedBy      pgtype.UUID
+}
+
+type StudentCard struct {
+	ID             pgtype.UUID
+	TenantID       pgtype.UUID
+	StudentID      pgtype.UUID
+	Status         string
+	IssuedAt       pgtype.Timestamptz
+	IssuedBy       pgtype.UUID
+	DisabledAt     pgtype.Timestamptz
+	DisabledBy     pgtype.UUID
+	DisabledReason pgtype.Text
 }
 
 type StudentFeeOverride struct {
