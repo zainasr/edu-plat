@@ -142,7 +142,7 @@ func newFixture(t *testing.T) *fixture {
 		students:   enrolment,
 		ledger:     ledger.NewService(app),
 		fees:       fees.NewService(app, structure, enrolment, ledger.NewService(app)),
-		attendance: attendance.NewService(app, structure, enrolment),
+		attendance: attendance.NewService(app, structure, enrolment, secret),
 	}
 }
 

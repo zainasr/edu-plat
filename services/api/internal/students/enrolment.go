@@ -516,3 +516,24 @@ func (s *Service) PrimaryContacts(ctx context.Context, tx pgx.Tx, tenantID strin
 	}
 	return out, nil
 }
+
+// SectionOnDay returns the section a student was enrolled in on a date, or "" if none, inside the
+// caller's open tenant transaction.
+func (s *Service) SectionOnDay(ctx context.Context, tx pgx.Tx, tenantID, studentID string, on time.Time) (string, error) {
+	tenant, err := db.ParseUUID(tenantID)
+	if err != nil {
+		return "", err
+	}
+	student, err := db.ParseUUID(studentID)
+	if err != nil {
+		return "", err
+	}
+	id, err := gen.New(tx).SectionOnDay(ctx, gen.SectionOnDayParams{TenantID: tenant, StudentID: student, OnDay: pgtype.Date{Time: on, Valid: true}})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("section on day: %w", err)
+	}
+	return db.UUIDString(id), nil
+}

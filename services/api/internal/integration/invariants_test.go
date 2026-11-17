@@ -168,7 +168,7 @@ func TestINV_MoneyColumnsAreBigint(t *testing.T) {
 func TestINV_HistoryTablesAreAppendOnly(t *testing.T) {
 	f := newFixture(t)
 	var bad []string
-	for _, table := range []string{"audit_log", "journal_entries", "journal_lines", "fee_plan_lines", "student_fee_overrides", "challan_lines", "payment_allocations", "advance_applications", "advance_refunds"} {
+	for _, table := range []string{"audit_log", "journal_entries", "journal_lines", "fee_plan_lines", "student_fee_overrides", "challan_lines", "payment_allocations", "advance_applications", "advance_refunds", "gate_scans"} {
 		var n int
 		if err := f.admin.QueryRow(context.Background(), `
 			SELECT count(*) FROM pg_trigger

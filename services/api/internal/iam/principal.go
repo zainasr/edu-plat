@@ -38,6 +38,7 @@ const (
 	PermAttendanceEditAny    = "attendance.edit_any"
 	PermAttendanceSettings   = "attendance.settings"
 	PermAttendanceContacts   = "attendance.contacts"
+	PermAttendanceScan       = "attendance.scan"
 
 	PermUserView   = "user.view"
 	PermUserManage = "user.manage"
@@ -53,7 +54,7 @@ var rolePermissions = map[string][]string{
 		PermLedgerView, PermReportFinanceView,
 		PermFeeView, PermFeePlanManage, PermFeeSettings, PermFeeGenerate, PermFeeRelease,
 		PermFeeCollect, PermPaymentVoid, PermFeeRefund,
-		PermCalendarManage, PermAttendanceView, PermAttendanceMark, PermAttendanceEditWindow, PermAttendanceEditAny, PermAttendanceSettings, PermAttendanceContacts,
+		PermCalendarManage, PermAttendanceView, PermAttendanceMark, PermAttendanceEditWindow, PermAttendanceEditAny, PermAttendanceSettings, PermAttendanceContacts, PermAttendanceScan,
 		PermUserView, PermUserManage, PermRoleManage,
 	},
 	// Accountant: fee.* except settings, and the accounting reads (spec 02-identity §3). Payments,
@@ -65,7 +66,7 @@ var rolePermissions = map[string][]string{
 	// Receptionist: sees students and fees and takes payments (fee.collect). The cash session arrives later.
 	"receptionist": {
 		PermStudentView, PermFeeView, PermFeeCollect, PermOrgView,
-		PermAttendanceView, PermAttendanceMark, PermAttendanceContacts,
+		PermAttendanceView, PermAttendanceMark, PermAttendanceContacts, PermAttendanceScan,
 	},
 	// Attendance clerk: the attendance desk enters absentees from teachers' paper slips (US-ATT-007). Teachers
 	// marking their own sections come with the staff module's section assignments.

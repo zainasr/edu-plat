@@ -28,12 +28,13 @@ type Service struct {
 	pool     *pgxpool.Pool
 	org      *org.Service
 	students *students.Service
+	cardKey  []byte // signs student card codes; derived from AUTH_SECRET, never the secret itself
 	now      func() time.Time
 }
 
-// NewService builds the attendance service.
-func NewService(pool *pgxpool.Pool, structure *org.Service, enrolment *students.Service) *Service {
-	return &Service{pool: pool, org: structure, students: enrolment, now: time.Now}
+// NewService builds the attendance service. secret signs the codes on student ID cards.
+func NewService(pool *pgxpool.Pool, structure *org.Service, enrolment *students.Service, secret []byte) *Service {
+	return &Service{pool: pool, org: structure, students: enrolment, cardKey: deriveCardKey(secret), now: time.Now}
 }
 
 // Settings are the school's attendance settings.
@@ -41,6 +42,18 @@ type Settings struct {
 	RegisterDueTime      string // HH:MM
 	EditWindowDays       int
 	LowAttendancePercent int
+	MorningStart         string // HH:MM
+	EveningStart         string // HH:MM
+	LateAfterMinutes     int
+}
+
+func clock(t pgtype.Time) string {
+	mins := int(t.Microseconds / 60_000_000)
+	return fmt.Sprintf("%02d:%02d", mins/60, mins%60)
+}
+
+func clockValue(minutes int) pgtype.Time {
+	return pgtype.Time{Microseconds: int64(minutes) * 60_000_000, Valid: true}
 }
 
 // Record is a student's current status in a register.
@@ -52,6 +65,8 @@ type Record struct {
 	Method         string // prefill, manual or correction
 	Version        int
 	Corrected      bool
+	GateArrivedAt  *time.Time // the student's first gate scan that day, if any
+	GateStatus     string     // how the gate classed it: present or late
 }
 
 // Register is one section's attendance for one day.
@@ -92,15 +107,17 @@ func loadSettings(ctx context.Context, q *gen.Queries, tenantID string) (Setting
 	r, err := q.GetSettings(ctx, tenant)
 	if errors.Is(err, pgx.ErrNoRows) {
 		// Never saved: the defaults apply, and a read writes nothing.
-		return Settings{RegisterDueTime: "10:00", EditWindowDays: defaultWindow, LowAttendancePercent: defaultThreshold}, nil
+		return Settings{
+			RegisterDueTime: "10:00", EditWindowDays: defaultWindow, LowAttendancePercent: defaultThreshold,
+			MorningStart: "08:00", EveningStart: "13:00", LateAfterMinutes: 10,
+		}, nil
 	}
 	if err != nil {
 		return Settings{}, fmt.Errorf("get settings: %w", err)
 	}
-	mins := int(r.RegisterDueTime.Microseconds / 60_000_000)
 	return Settings{
-		RegisterDueTime: fmt.Sprintf("%02d:%02d", mins/60, mins%60), EditWindowDays: int(r.EditWindowDays),
-		LowAttendancePercent: int(r.LowAttendancePercent),
+		RegisterDueTime: clock(r.RegisterDueTime), EditWindowDays: int(r.EditWindowDays), LowAttendancePercent: int(r.LowAttendancePercent),
+		MorningStart: clock(r.MorningStart), EveningStart: clock(r.EveningStart), LateAfterMinutes: int(r.LateAfterMinutes),
 	}, nil
 }
 
@@ -127,15 +144,16 @@ func (s *Service) SetSettings(ctx context.Context, p iam.Principal, in SettingsI
 		if err != nil {
 			return err
 		}
-		due := pgtype.Time{Microseconds: int64(parsed.DueHour*60+parsed.DueMinute) * 60_000_000, Valid: true}
 		if err := q.SetSettings(ctx, gen.SetSettingsParams{
-			TenantID: tenant, RegisterDueTime: due, EditWindowDays: int32(parsed.EditWindowDays),
-			LowAttendancePercent: int32(parsed.LowAttendancePercent), UpdatedBy: actor,
+			TenantID: tenant, RegisterDueTime: clockValue(parsed.DueHour*60 + parsed.DueMinute), EditWindowDays: int32(parsed.EditWindowDays),
+			LowAttendancePercent: int32(parsed.LowAttendancePercent), MorningStart: clockValue(parsed.MorningStartMin),
+			EveningStart: clockValue(parsed.EveningStartMin), LateAfterMinutes: int32(parsed.LateAfterMinutes), UpdatedBy: actor,
 		}); err != nil {
 			return fmt.Errorf("set settings: %w", err)
 		}
 		if err := s.audit(ctx, tx, p, "attendance.settings_changed", "attendance_settings", p.TenantID, map[string]any{
 			"register_due_time": in.RegisterDueTime, "edit_window_days": parsed.EditWindowDays, "low_attendance_percent": parsed.LowAttendancePercent,
+			"morning_start": in.MorningStart, "evening_start": in.EveningStart, "late_after_minutes": parsed.LateAfterMinutes,
 		}); err != nil {
 			return err
 		}
@@ -534,6 +552,10 @@ func (s *Service) readRegister(ctx context.Context, tx pgx.Tx, q *gen.Queries, t
 	if err != nil {
 		return Register{}, err
 	}
+	arrivals, err := arrivalsOnDay(ctx, q, tenant, row.Day, rows)
+	if err != nil {
+		return Register{}, err
+	}
 	reg := Register{ID: db.UUIDString(row.ID), SectionID: secID, SectionName: sectionLabel(sections[secID]), Date: row.Day.Time, Status: row.Status, Records: []Record{}}
 	if row.SubmittedAt.Valid {
 		t := row.SubmittedAt.Time
@@ -547,6 +569,10 @@ func (s *Service) readRegister(ctx context.Context, tx pgx.Tx, q *gen.Queries, t
 			StudentID: id, RegistrationNo: b.RegistrationNo, FullName: b.FullName, Status: r.Status, Method: r.Method,
 			Version: int(r.Version), Corrected: r.Corrected,
 		})
+		if a, ok := arrivals[id]; ok {
+			at := a.at
+			reg.Records[len(reg.Records)-1].GateArrivedAt, reg.Records[len(reg.Records)-1].GateStatus = &at, a.status
+		}
 		statuses = append(statuses, r.Status)
 	}
 	sort.Slice(reg.Records, func(i, j int) bool {

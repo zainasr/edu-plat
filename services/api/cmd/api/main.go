@@ -61,7 +61,7 @@ func run() error {
 	enrolment := students.NewService(pool, structure) // students asks org to describe sections
 	books := ledger.NewService(pool)                  // the double-entry core; fee code posts to it
 	setup := fees.NewService(pool, structure, enrolment, books)
-	register := attendance.NewService(pool, structure, enrolment)
+	register := attendance.NewService(pool, structure, enrolment, cfg.AuthSecret)
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           api.Handler(api.NewServer(identity, structure, enrolment, books, setup, register), identity, api.WithIdempotency(pool)),

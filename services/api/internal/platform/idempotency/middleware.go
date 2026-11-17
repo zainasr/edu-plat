@@ -37,6 +37,7 @@ var Operations = []string{
 	"POST /api/v1/staff/{staffId}/roles",
 	"POST /api/v1/payments",
 	"POST /api/v1/payments/{paymentId}/refund",
+	"POST /api/v1/students/{studentId}/cards",
 }
 
 // New returns middleware to register on the generated routes (so the matched route is known). whoIs says

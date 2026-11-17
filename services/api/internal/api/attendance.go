@@ -37,9 +37,27 @@ func (s *Server) SetAttendanceSettings(ctx context.Context, req gen.SetAttendanc
 	if req.Body == nil {
 		return nil, apperr.Validation("request.body_required", "A JSON body is required.")
 	}
-	cfg, err := s.attendance.SetSettings(ctx, p, attendance.SettingsInput{
+	in := attendance.SettingsInput{
 		RegisterDueTime: req.Body.RegisterDueTime, EditWindowDays: req.Body.EditWindowDays, LowAttendancePercent: req.Body.LowAttendancePercent,
-	})
+	}
+	// The shift fields arrived after the first release: a client that does not send them keeps what is saved.
+	if req.Body.MorningStart == nil || req.Body.EveningStart == nil || req.Body.LateAfterMinutes == nil {
+		current, err := s.attendance.GetSettings(ctx, p)
+		if err != nil {
+			return nil, err
+		}
+		in.MorningStart, in.EveningStart, in.LateAfterMinutes = current.MorningStart, current.EveningStart, current.LateAfterMinutes
+	}
+	if req.Body.MorningStart != nil {
+		in.MorningStart = *req.Body.MorningStart
+	}
+	if req.Body.EveningStart != nil {
+		in.EveningStart = *req.Body.EveningStart
+	}
+	if req.Body.LateAfterMinutes != nil {
+		in.LateAfterMinutes = *req.Body.LateAfterMinutes
+	}
+	cfg, err := s.attendance.SetSettings(ctx, p, in)
 	if err != nil {
 		return nil, err
 	}
@@ -293,7 +311,10 @@ func (s *Server) GetStudentAttendance(ctx context.Context, req gen.GetStudentAtt
 }
 
 func toAPISettings(c attendance.Settings) gen.AttendanceSettings {
-	return gen.AttendanceSettings{RegisterDueTime: c.RegisterDueTime, EditWindowDays: c.EditWindowDays, LowAttendancePercent: c.LowAttendancePercent}
+	return gen.AttendanceSettings{
+		RegisterDueTime: c.RegisterDueTime, EditWindowDays: c.EditWindowDays, LowAttendancePercent: c.LowAttendancePercent,
+		MorningStart: &c.MorningStart, EveningStart: &c.EveningStart, LateAfterMinutes: &c.LateAfterMinutes,
+	}
 }
 
 func toAPICounts(c attendance.Counts) gen.RegisterCounts {
@@ -335,10 +356,15 @@ func toAPIRegister(r attendance.Register) (gen.Register, error) {
 		if err != nil {
 			return gen.Register{}, err
 		}
-		records = append(records, gen.AttendanceRecord{
+		item := gen.AttendanceRecord{
 			StudentId: stu, RegistrationNo: rec.RegistrationNo, FullName: rec.FullName, Status: gen.AttendanceStatus(rec.Status),
-			Method: gen.AttendanceRecordMethod(rec.Method), Version: rec.Version, Corrected: rec.Corrected,
-		})
+			Method: gen.AttendanceRecordMethod(rec.Method), Version: rec.Version, Corrected: rec.Corrected, GateArrivedAt: rec.GateArrivedAt,
+		}
+		if rec.GateStatus != "" {
+			gs := gen.AttendanceRecordGateStatus(rec.GateStatus)
+			item.GateStatus = &gs
+		}
+		records = append(records, item)
 	}
 	return gen.Register{
 		Id: id, SectionId: sec, SectionName: &name, Date: openapitypes.Date{Time: r.Date}, Status: gen.RegisterStatus(r.Status),

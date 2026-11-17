@@ -338,14 +338,14 @@ func TestREQ_ATT_016_MissingRegisters(t *testing.T) {
 	}
 
 	// Before the due time: nothing is overdue yet.
-	if _, err := f.attendance.SetSettings(ctx, w.owner, attendance.SettingsInput{RegisterDueTime: "23:59", EditWindowDays: 7, LowAttendancePercent: 75}); err != nil {
+	if _, err := f.attendance.SetSettings(ctx, w.owner, attendance.SettingsInput{RegisterDueTime: "23:59", EditWindowDays: 7, LowAttendancePercent: 75, MorningStart: "08:00", EveningStart: "13:00", LateAfterMinutes: 10}); err != nil {
 		t.Fatal(err)
 	}
 	if m, _ := f.attendance.MissingRegisters(ctx, w.owner, today()); m.Overdue || len(m.Items) != 0 {
 		t.Fatalf("before the due time: %+v", m)
 	}
 	// After it: A has an open register, B has none; both are missing, and nobody is marked absent.
-	if _, err := f.attendance.SetSettings(ctx, w.owner, attendance.SettingsInput{RegisterDueTime: "00:00", EditWindowDays: 7, LowAttendancePercent: 75}); err != nil {
+	if _, err := f.attendance.SetSettings(ctx, w.owner, attendance.SettingsInput{RegisterDueTime: "00:00", EditWindowDays: 7, LowAttendancePercent: 75, MorningStart: "08:00", EveningStart: "13:00", LateAfterMinutes: 10}); err != nil {
 		t.Fatal(err)
 	}
 	a := w.open(t, f, today())
@@ -690,7 +690,7 @@ func TestREQ_API_AttendanceOverHTTP(t *testing.T) {
 	if rec := do(t, h, http.MethodGet, "/api/v1/attendance/settings", w.token, ""); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"register_due_time":"10:00"`) {
 		t.Fatalf("settings: %d %s", rec.Code, rec.Body)
 	}
-	if rec := do(t, h, http.MethodPut, "/api/v1/attendance/settings", w.token, `{"register_due_time":"25:00","edit_window_days":7,"low_attendance_percent":75}`); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "attendance.settings_invalid") {
+	if rec := do(t, h, http.MethodPut, "/api/v1/attendance/settings", w.token, `{"register_due_time":"25:00","edit_window_days":7,"low_attendance_percent":75,"morning_start":"08:00","evening_start":"13:00","late_after_minutes":10}`); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "attendance.settings_invalid") {
 		t.Fatalf("bad settings: %d %s", rec.Code, rec.Body)
 	}
 }
@@ -858,10 +858,10 @@ func TestREQ_ATT_ReadsDoNotWrite(t *testing.T) {
 		t.Fatalf("a read must not create rows: %d %d", settings, calendar)
 	}
 	// Saving creates them, and saving again changes them.
-	if _, err := f.attendance.SetSettings(ctx, p, attendance.SettingsInput{RegisterDueTime: "09:15", EditWindowDays: 3, LowAttendancePercent: 80}); err != nil {
+	if _, err := f.attendance.SetSettings(ctx, p, attendance.SettingsInput{RegisterDueTime: "09:15", EditWindowDays: 3, LowAttendancePercent: 80, MorningStart: "08:00", EveningStart: "13:00", LateAfterMinutes: 10}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.attendance.SetSettings(ctx, p, attendance.SettingsInput{RegisterDueTime: "09:45", EditWindowDays: 5, LowAttendancePercent: 70}); err != nil {
+	if _, err := f.attendance.SetSettings(ctx, p, attendance.SettingsInput{RegisterDueTime: "09:45", EditWindowDays: 5, LowAttendancePercent: 70, MorningStart: "08:00", EveningStart: "13:00", LateAfterMinutes: 10}); err != nil {
 		t.Fatal(err)
 	}
 	if cfg, _ := f.attendance.GetSettings(ctx, p); cfg.RegisterDueTime != "09:45" || cfg.EditWindowDays != 5 || cfg.LowAttendancePercent != 70 {
