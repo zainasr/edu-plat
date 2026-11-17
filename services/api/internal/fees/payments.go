@@ -31,20 +31,37 @@ type PaymentAllocation struct {
 
 // Payment is a payment and its receipt.
 type Payment struct {
+	ID         string
+	ReceiptNo  string
+	FiscalYear int
+	FamilyID   string
+	Amount     money.Money
+	// Advance is the part of the payment held for the family's next challans; Applied and Refunded are how
+	// much of it has been used, and Available what is left. Worked out when read, never stored.
+	Advance          money.Money
+	AdvanceApplied   money.Money
+	AdvanceRefunded  money.Money
+	AdvanceAvailable money.Money
+	Method           string
+	AccountCode      string
+	Reference        *string
+	ReceivedOn       time.Time
+	Status           string
+	Allocations      []PaymentAllocation
+	Refunds          []AdvanceRefund
+	EntryID          string
+	VoidReason       *string
+	VoidedAt         *time.Time
+	CreatedAt        time.Time
+}
+
+// AdvanceRefund is advance paid back to a family.
+type AdvanceRefund struct {
 	ID          string
-	ReceiptNo   string
-	FiscalYear  int
-	FamilyID    string
 	Amount      money.Money
-	Method      string
 	AccountCode string
-	Reference   *string
-	ReceivedOn  time.Time
-	Status      string
-	Allocations []PaymentAllocation
+	Reason      string
 	EntryID     string
-	VoidReason  *string
-	VoidedAt    *time.Time
 	CreatedAt   time.Time
 }
 
@@ -78,7 +95,9 @@ type DueItem struct {
 type FamilyDues struct {
 	FamilyID string
 	TotalDue money.Money
-	Items    []DueItem
+	// AdvanceAvailable is the advance the family holds, which the next challans will use.
+	AdvanceAvailable money.Money
+	Items            []DueItem
 }
 
 var (
@@ -120,7 +139,7 @@ func (s *Service) RecordPayment(ctx context.Context, p iam.Principal, in Payment
 		if err != nil {
 			return err
 		}
-		allocs, err := allocate(in.Amount, balances, in.Allocations)
+		allocs, advance, err := allocate(in.Amount, balances, in.Allocations, in.HoldExcessAsAdvance)
 		if err != nil {
 			return err
 		}
@@ -132,7 +151,7 @@ func (s *Service) RecordPayment(ctx context.Context, p iam.Principal, in Payment
 		}
 		receipt := receiptNumber(fy, no)
 		id := uuid.New()
-		entry, err := s.ledger.Post(ctx, tx, p, paymentEntry(id.String(), receipt, in.AccountCode, in.Amount, in.ReceivedOn))
+		entry, err := s.ledger.Post(ctx, tx, p, paymentEntry(id.String(), receipt, in.AccountCode, in.Amount, advance, in.ReceivedOn))
 		if err != nil {
 			return fmt.Errorf("post payment: %w", err)
 		}
@@ -143,7 +162,7 @@ func (s *Service) RecordPayment(ctx context.Context, p iam.Principal, in Payment
 		paymentID := pgtype.UUID{Bytes: id, Valid: true}
 		params := gen.InsertPaymentParams{
 			ID: paymentID, TenantID: tenant, FamilyID: family, FiscalYear: int32(fy), ReceiptNo: no,
-			Amount: int64(in.Amount), Method: in.Method, AccountCode: in.AccountCode,
+			Amount: int64(in.Amount), Advance: int64(advance), Method: in.Method, AccountCode: in.AccountCode,
 			ReceivedOn: pgtype.Date{Time: in.ReceivedOn, Valid: true}, JournalEntryID: entryID, CreatedBy: actor,
 		}
 		if in.Reference != "" {
@@ -163,7 +182,7 @@ func (s *Service) RecordPayment(ctx context.Context, p iam.Principal, in Payment
 		}
 		if err := s.audit(ctx, tx, p, "payment.recorded", "payment", id.String(), map[string]any{
 			"receipt_no": receipt, "amount": int64(in.Amount), "method": in.Method, "account": in.AccountCode,
-			"family_id": in.FamilyID, "challans": len(allocs),
+			"family_id": in.FamilyID, "challans": len(allocs), "advance": int64(advance),
 		}); err != nil {
 			return err
 		}
@@ -201,6 +220,14 @@ func (s *Service) VoidPayment(ctx context.Context, p iam.Principal, id, reason s
 		}
 		if row.Status != "recorded" {
 			return apperr.Conflict("payments.already_voided", "This payment has already been voided.")
+		}
+		held, err := q.GetPayment(ctx, gen.GetPaymentParams{TenantID: tenant, ID: uid})
+		if err != nil {
+			return fmt.Errorf("read payment: %w", err)
+		}
+		if held.AdvanceApplied+held.AdvanceRefunded > 0 {
+			return apperr.Conflict("payments.advance_in_use",
+				"Part of this payment's advance has already been applied to a challan or refunded, so it can no longer be voided.")
 		}
 		reversal, err := s.ledger.Reverse(ctx, tx, p, db.UUIDString(row.JournalEntryID), reason, s.now().In(pakistanZone))
 		if err != nil {
@@ -300,9 +327,17 @@ func (s *Service) ListPayments(ctx context.Context, p iam.Principal, f PaymentFi
 		if err != nil {
 			return err
 		}
+		refunds, err := loadRefunds(ctx, q, tenant, ids)
+		if err != nil {
+			return err
+		}
 		page.Items = make([]Payment, 0, len(rows))
 		for _, r := range rows {
-			page.Items = append(page.Items, toPayment(gen.GetPaymentRow(r), allocs[db.UUIDString(r.ID)]))
+			item := toPayment(gen.GetPaymentRow(r), allocs[db.UUIDString(r.ID)])
+			if rs := refunds[db.UUIDString(r.ID)]; rs != nil {
+				item.Refunds = rs
+			}
+			page.Items = append(page.Items, item)
 		}
 		if more && len(rows) > 0 {
 			last := rows[len(rows)-1]
@@ -328,6 +363,13 @@ func (s *Service) GetFamilyDues(ctx context.Context, p iam.Principal, familyID s
 		family, err := db.ParseUUID(familyID)
 		if err != nil {
 			return err
+		}
+		held, err := familyAdvance(ctx, q, tenant, family)
+		if err != nil {
+			return err
+		}
+		for _, h := range held {
+			out.AdvanceAvailable += h.Remaining
 		}
 		rows, err := q.FamilyChallanBalances(ctx, gen.FamilyChallanBalancesParams{TenantID: tenant, FamilyID: family})
 		if err != nil {
@@ -385,6 +427,21 @@ func familyBalances(ctx context.Context, q *gen.Queries, tenant, family pgtype.U
 	return out, nil
 }
 
+// familyAdvance is what each of a family's payments still holds as advance, oldest first. Spent ones are left out.
+func familyAdvance(ctx context.Context, q *gen.Queries, tenant, family pgtype.UUID) ([]AdvanceBalance, error) {
+	rows, err := q.FamilyAdvanceBalances(ctx, gen.FamilyAdvanceBalancesParams{TenantID: tenant, FamilyID: family})
+	if err != nil {
+		return nil, fmt.Errorf("family advance: %w", err)
+	}
+	out := make([]AdvanceBalance, 0, len(rows))
+	for _, r := range rows {
+		if r.Remaining > 0 {
+			out = append(out, AdvanceBalance{PaymentID: db.UUIDString(r.ID), Remaining: money.Money(r.Remaining)})
+		}
+	}
+	return out, nil
+}
+
 func readPayment(ctx context.Context, q *gen.Queries, tenant, id pgtype.UUID) (Payment, error) {
 	row, err := q.GetPayment(ctx, gen.GetPaymentParams{TenantID: tenant, ID: id})
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -397,7 +454,34 @@ func readPayment(ctx context.Context, q *gen.Queries, tenant, id pgtype.UUID) (P
 	if err != nil {
 		return Payment{}, err
 	}
-	return toPayment(row, allocs[db.UUIDString(id)]), nil
+	refunds, err := loadRefunds(ctx, q, tenant, []pgtype.UUID{id})
+	if err != nil {
+		return Payment{}, err
+	}
+	out := toPayment(row, allocs[db.UUIDString(id)])
+	if r := refunds[db.UUIDString(id)]; r != nil {
+		out.Refunds = r
+	}
+	return out, nil
+}
+
+func loadRefunds(ctx context.Context, q *gen.Queries, tenant pgtype.UUID, ids []pgtype.UUID) (map[string][]AdvanceRefund, error) {
+	out := map[string][]AdvanceRefund{}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	rows, err := q.ListRefundsForPayments(ctx, gen.ListRefundsForPaymentsParams{TenantID: tenant, PaymentIds: ids})
+	if err != nil {
+		return nil, fmt.Errorf("list refunds: %w", err)
+	}
+	for _, r := range rows {
+		k := db.UUIDString(r.PaymentID)
+		out[k] = append(out[k], AdvanceRefund{
+			ID: db.UUIDString(r.ID), Amount: money.Money(r.Amount), AccountCode: r.AccountCode, Reason: r.Reason,
+			EntryID: db.UUIDString(r.JournalEntryID), CreatedAt: r.CreatedAt.Time,
+		})
+	}
+	return out, nil
 }
 
 func loadAllocations(ctx context.Context, q *gen.Queries, tenant pgtype.UUID, ids []pgtype.UUID) (map[string][]PaymentAllocation, error) {
@@ -422,12 +506,17 @@ func toPayment(r gen.GetPaymentRow, allocs []PaymentAllocation) Payment {
 	p := Payment{
 		ID: db.UUIDString(r.ID), ReceiptNo: receiptNumber(int(r.FiscalYear), r.ReceiptNo), FiscalYear: int(r.FiscalYear),
 		FamilyID: db.UUIDString(r.FamilyID), Amount: money.Money(r.Amount), Method: r.Method, AccountCode: r.AccountCode,
+		Advance: money.Money(r.Advance), AdvanceApplied: money.Money(r.AdvanceApplied), AdvanceRefunded: money.Money(r.AdvanceRefunded),
 		ReceivedOn: r.ReceivedOn.Time, Status: r.Status, Allocations: allocs, EntryID: db.UUIDString(r.JournalEntryID),
 		CreatedAt: r.CreatedAt.Time,
 	}
 	if p.Allocations == nil {
 		p.Allocations = []PaymentAllocation{}
 	}
+	if r.Status == "recorded" {
+		p.AdvanceAvailable = p.Advance - p.AdvanceApplied - p.AdvanceRefunded
+	}
+	p.Refunds = []AdvanceRefund{}
 	if r.Reference.Valid {
 		p.Reference = &r.Reference.String
 	}

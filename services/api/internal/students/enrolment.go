@@ -396,3 +396,36 @@ func (s *Service) RequireFamily(ctx context.Context, tx pgx.Tx, tenantID, family
 	}
 	return nil
 }
+
+// FeePayer is the guardian to contact about a family's fees.
+type FeePayer struct {
+	Name         string
+	Mobile       string
+	Relationship string
+}
+
+// FamilyFeePayers returns, for each given family, the guardian marked as the fee payer, else the primary
+// guardian (REQ-FEE-008), inside the caller's open tenant transaction. Families with no guardian are absent.
+func (s *Service) FamilyFeePayers(ctx context.Context, tx pgx.Tx, tenantID string, familyIDs []string) (map[string]FeePayer, error) {
+	tenant, err := db.ParseUUID(tenantID)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]pgtype.UUID, 0, len(familyIDs))
+	for _, id := range familyIDs {
+		u, err := db.ParseUUID(id)
+		if err != nil {
+			return nil, err
+		}
+		ids = append(ids, u)
+	}
+	rows, err := gen.New(tx).FamilyFeePayers(ctx, gen.FamilyFeePayersParams{TenantID: tenant, FamilyIds: ids})
+	if err != nil {
+		return nil, fmt.Errorf("family fee payers: %w", err)
+	}
+	out := make(map[string]FeePayer, len(rows))
+	for _, r := range rows {
+		out[db.UUIDString(r.FamilyID)] = FeePayer{Name: r.FullName, Mobile: r.Mobile, Relationship: r.Relationship}
+	}
+	return out, nil
+}

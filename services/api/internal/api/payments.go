@@ -42,6 +42,7 @@ func (s *Server) RecordPayment(ctx context.Context, req gen.RecordPaymentRequest
 	if req.Body.Reference != nil {
 		in.Reference = *req.Body.Reference
 	}
+	in.HoldExcessAsAdvance = req.Body.HoldExcessAsAdvance != nil && *req.Body.HoldExcessAsAdvance
 	if req.Body.Allocations != nil {
 		for _, a := range *req.Body.Allocations {
 			m, err := fromAPIMoney(&a.Amount)
@@ -163,7 +164,7 @@ func (s *Server) GetFamilyDues(ctx context.Context, req gen.GetFamilyDuesRequest
 			Total: toAPIMoney(it.Total), Paid: toAPIMoney(it.Paid), Balance: toAPIMoney(it.Balance),
 		})
 	}
-	return gen.GetFamilyDues200JSONResponse{FamilyId: req.FamilyId, TotalDue: toAPIMoney(d.TotalDue), Items: items}, nil
+	return gen.GetFamilyDues200JSONResponse{FamilyId: req.FamilyId, TotalDue: toAPIMoney(d.TotalDue), AdvanceAvailable: toAPIMoney(d.AdvanceAvailable), Items: items}, nil
 }
 
 func toAPIPayment(p fees.Payment) (gen.Payment, error) {
@@ -191,10 +192,105 @@ func toAPIPayment(p fees.Payment) (gen.Payment, error) {
 		}
 		allocs = append(allocs, gen.PaymentAllocation{ChallanId: challan, StudentId: student, ChallanNo: a.ChallanNo, Amount: toAPIMoney(a.Amount)})
 	}
+	refunds := make([]gen.AdvanceRefund, 0, len(p.Refunds))
+	for _, r := range p.Refunds {
+		rid, err := uuid.Parse(r.ID)
+		if err != nil {
+			return gen.Payment{}, err
+		}
+		eid, err := uuid.Parse(r.EntryID)
+		if err != nil {
+			return gen.Payment{}, err
+		}
+		refunds = append(refunds, gen.AdvanceRefund{Id: rid, Amount: toAPIMoney(r.Amount), AccountCode: gen.PaymentAccount(r.AccountCode), Reason: r.Reason, EntryId: eid, CreatedAt: r.CreatedAt})
+	}
 	return gen.Payment{
+		Advance: toAPIMoney(p.Advance), AdvanceApplied: toAPIMoney(p.AdvanceApplied), AdvanceRefunded: toAPIMoney(p.AdvanceRefunded),
+		AdvanceAvailable: toAPIMoney(p.AdvanceAvailable), Refunds: refunds,
 		Id: id, ReceiptNo: p.ReceiptNo, FiscalYear: p.FiscalYear, FamilyId: family, Amount: toAPIMoney(p.Amount),
 		Method: gen.PaymentMethod(p.Method), AccountCode: gen.PaymentAccount(p.AccountCode), Reference: p.Reference,
 		ReceivedOn: openapitypes.Date{Time: p.ReceivedOn}, Status: gen.PaymentStatus(p.Status), Allocations: allocs,
 		EntryId: entry, VoidReason: p.VoidReason, VoidedAt: p.VoidedAt, CreatedAt: p.CreatedAt,
 	}, nil
+}
+
+// RefundAdvance pays back advance that has not been applied.
+func (s *Server) RefundAdvance(ctx context.Context, req gen.RefundAdvanceRequestObject) (gen.RefundAdvanceResponseObject, error) {
+	p, err := iam.Require(ctx, iam.PermFeeRefund)
+	if err != nil {
+		return nil, err
+	}
+	if req.Body == nil {
+		return nil, apperr.Validation("request.body_required", "A JSON body is required.")
+	}
+	amount, err := fromAPIMoney(&req.Body.Amount)
+	if err != nil {
+		return nil, err
+	}
+	pay, err := s.fees.RefundAdvance(ctx, p, req.PaymentId.String(), fees.RefundInput{
+		Amount: *amount, AccountCode: string(req.Body.AccountCode), Reason: req.Body.Reason,
+	})
+	if err != nil {
+		return nil, err
+	}
+	out, err := toAPIPayment(pay)
+	if err != nil {
+		return nil, err
+	}
+	return gen.RefundAdvance200JSONResponse(out), nil
+}
+
+// ListDefaulters lists the families that are overdue by the window, most overdue first.
+func (s *Server) ListDefaulters(ctx context.Context, req gen.ListDefaultersRequestObject) (gen.ListDefaultersResponseObject, error) {
+	p, err := iam.Require(ctx, iam.PermFeeView)
+	if err != nil {
+		return nil, err
+	}
+	f := fees.DefaulterFilter{MinDays: req.Params.MinDays}
+	if req.Params.Limit != nil {
+		f.Limit = *req.Params.Limit
+	}
+	if req.Params.Cursor != nil {
+		f.Cursor = *req.Params.Cursor
+	}
+	page, err := s.fees.ListDefaulters(ctx, p, f)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]gen.Defaulter, 0, len(page.Items))
+	for _, d := range page.Items {
+		family, err := uuid.Parse(d.FamilyID)
+		if err != nil {
+			return nil, err
+		}
+		challans := make([]gen.DueItem, 0, len(d.Challans))
+		for _, it := range d.Challans {
+			challan, err := uuid.Parse(it.ChallanID)
+			if err != nil {
+				return nil, err
+			}
+			student, err := uuid.Parse(it.StudentID)
+			if err != nil {
+				return nil, err
+			}
+			challans = append(challans, gen.DueItem{
+				ChallanId: challan, StudentId: student, ChallanNo: it.ChallanNo,
+				Month: openapitypes.Date{Time: it.Month}, DueDate: openapitypes.Date{Time: it.DueDate},
+				Total: toAPIMoney(it.Total), Paid: toAPIMoney(it.Paid), Balance: toAPIMoney(it.Balance),
+			})
+		}
+		item := gen.Defaulter{
+			FamilyId: family, OverdueTotal: toAPIMoney(d.OverdueTotal), OldestDueDate: openapitypes.Date{Time: d.OldestDue},
+			DaysOverdue: d.DaysOverdue, Challans: challans,
+		}
+		if d.FeePayer != nil {
+			item.FeePayer = &gen.FeePayer{Name: d.FeePayer.Name, Mobile: d.FeePayer.Mobile, Relationship: d.FeePayer.Relationship}
+		}
+		items = append(items, item)
+	}
+	out := gen.ListDefaulters200JSONResponse{Items: items}
+	if page.NextCursor != "" {
+		out.NextCursor = &page.NextCursor
+	}
+	return out, nil
 }

@@ -64,6 +64,8 @@ func TestREQ_IAM_005_BuiltInRolesHoldTheirPermissions(t *testing.T) {
 		{"fee.view: list payments", http.MethodGet, "/api/v1/payments", "", true, true, true},
 		{"fee.view: get payment", http.MethodGet, "/api/v1/payments/" + id, "", true, true, true},
 		{"payment.void: void a payment", http.MethodPost, "/api/v1/payments/" + id + "/void", `{"reason":"x"}`, true, true, false},
+		{"fee.refund: refund advance", http.MethodPost, "/api/v1/payments/" + id + "/refund", `{}`, true, true, false},
+		{"fee.view: defaulters", http.MethodGet, "/api/v1/defaulters", "", true, true, true},
 		{"fee.view: family dues", http.MethodGet, "/api/v1/families/" + id + "/dues", "", true, true, true},
 		{"user.view: list roles", http.MethodGet, "/api/v1/roles", "", true, false, false},
 		{"user.view: list staff", http.MethodGet, "/api/v1/staff", "", true, false, false},

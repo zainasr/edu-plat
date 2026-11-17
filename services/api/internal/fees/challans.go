@@ -266,6 +266,7 @@ func (s *Service) Release(ctx context.Context, p iam.Principal, ids []string) ([
 		// row per school and is held until commit, so taking it between challan locks would let two
 		// overlapping batches wait on each other (deadlock).
 		uids := make([]pgtype.UUID, 0, len(ordered))
+		var families []string
 		for _, id := range ordered {
 			uid, err := db.ParseUUID(id)
 			if err != nil {
@@ -282,6 +283,21 @@ func (s *Service) Release(ctx context.Context, p iam.Principal, ids []string) ([
 				return errNotDraft
 			}
 			uids = append(uids, uid)
+			families = append(families, db.UUIDString(row.FamilyID))
+		}
+		// Advance a family holds is spent on its new challans. Lock those payments now, before any counter
+		// is taken, so a refund or void of the same payment (payment row, then journal counter) cannot
+		// wait on this release (journal counter, then payment row).
+		familyUUIDs := make([]pgtype.UUID, 0, len(families))
+		for _, fam := range sortedUnique(families) {
+			u, err := db.ParseUUID(fam)
+			if err != nil {
+				return err
+			}
+			familyUUIDs = append(familyUUIDs, u)
+		}
+		if _, err := q.LockFamilyAdvancePayments(ctx, gen.LockFamilyAdvancePaymentsParams{TenantID: tenant, FamilyIds: familyUUIDs}); err != nil {
+			return fmt.Errorf("lock family advance: %w", err)
 		}
 		for i, id := range ordered {
 			uid := uids[i]
@@ -308,6 +324,9 @@ func (s *Service) Release(ctx context.Context, p iam.Principal, ids []string) ([
 			}
 			if err := s.audit(ctx, tx, p, "challan.released", "challan", id,
 				map[string]any{"challan_no": no, "total": c.Total, "student_id": db.UUIDString(c.StudentID)}); err != nil {
+				return err
+			}
+			if err := s.applyAdvanceToChallan(ctx, tx, q, p, tenant, actor, uid, c.FamilyID, no, money.Money(c.Total), on); err != nil {
 				return err
 			}
 		}
