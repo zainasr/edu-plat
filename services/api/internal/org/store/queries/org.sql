@@ -93,3 +93,55 @@ SELECT s.id, s.class_id, c.name AS class_name, c.status AS class_status, c.branc
 FROM sections s
 JOIN classes c ON c.tenant_id = s.tenant_id AND c.id = s.class_id
 WHERE s.tenant_id = sqlc.arg('tenant_id') AND s.id = ANY(sqlc.arg('ids')::uuid[]);
+
+-- ---- calendar (slice 6a) --------------------------------------------------------------
+
+-- name: GetCalendarSettings :one
+SELECT weekly_off_days
+FROM calendar_settings
+WHERE tenant_id = sqlc.arg('tenant_id');
+
+-- name: SetWeeklyOff :exec
+-- The row is created the first time the weekly off days are saved; until then reads use Sunday.
+INSERT INTO calendar_settings (tenant_id, weekly_off_days, updated_by)
+VALUES (sqlc.arg('tenant_id'), sqlc.arg('weekly_off_days')::smallint[], sqlc.arg('updated_by'))
+ON CONFLICT (tenant_id) DO UPDATE
+SET weekly_off_days = EXCLUDED.weekly_off_days, updated_at = now(), updated_by = EXCLUDED.updated_by;
+
+-- name: InsertCalendarDay :one
+-- DO NOTHING on the one-active-entry-per-date index: a date that already has one returns no row.
+INSERT INTO calendar_days (tenant_id, day, kind, name, created_by)
+VALUES (sqlc.arg('tenant_id'), sqlc.arg('day'), sqlc.arg('kind'), sqlc.arg('name'), sqlc.arg('created_by'))
+ON CONFLICT (tenant_id, day) WHERE status = 'active' DO NOTHING
+RETURNING id, day, kind, name, status;
+
+-- name: ListCalendarDays :many
+SELECT id, day, kind, name, status
+FROM calendar_days
+WHERE tenant_id = sqlc.arg('tenant_id') AND status = 'active'
+  AND day BETWEEN sqlc.arg('from_day')::date AND sqlc.arg('to_day')::date
+ORDER BY day;
+
+-- name: ActiveCalendarDay :one
+SELECT id, day, kind, name, status
+FROM calendar_days
+WHERE tenant_id = sqlc.arg('tenant_id') AND status = 'active' AND day = sqlc.arg('day')::date;
+
+-- name: RemoveCalendarDay :one
+UPDATE calendar_days
+SET status = 'removed', removed_at = now(), removed_by = sqlc.arg('removed_by')
+WHERE tenant_id = sqlc.arg('tenant_id') AND id = sqlc.arg('id') AND status = 'active'
+RETURNING id, day, kind, name, status;
+
+-- name: GetCalendarDay :one
+SELECT id, day, kind, name, status
+FROM calendar_days
+WHERE tenant_id = sqlc.arg('tenant_id') AND id = sqlc.arg('id');
+
+-- name: ListActiveSectionsAll :many
+-- Every active section of an active class, for modules that must visit each one (missing registers).
+SELECT s.id, s.class_id, c.name AS class_name, s.name, s.shift, s.status
+FROM sections s
+JOIN classes c ON c.tenant_id = s.tenant_id AND c.id = s.class_id
+WHERE s.tenant_id = sqlc.arg('tenant_id') AND s.status = 'active' AND c.status = 'active'
+ORDER BY c.grade_level, c.name, s.name, s.shift, s.id;

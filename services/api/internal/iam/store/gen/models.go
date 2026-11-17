@@ -54,6 +54,40 @@ type ApiToken struct {
 	CreatedAt    pgtype.Timestamptz
 }
 
+type AttendanceRecord struct {
+	TenantID   pgtype.UUID
+	RegisterID pgtype.UUID
+	StudentID  pgtype.UUID
+	Version    int32
+	Status     string
+	Method     string
+	Reason     pgtype.Text
+	ChangedBy  pgtype.UUID
+	ChangedAt  pgtype.Timestamptz
+}
+
+type AttendanceRegister struct {
+	ID          pgtype.UUID
+	TenantID    pgtype.UUID
+	SectionID   pgtype.UUID
+	Day         pgtype.Date
+	Status      string
+	SubmittedAt pgtype.Timestamptz
+	SubmittedBy pgtype.UUID
+	CreatedAt   pgtype.Timestamptz
+	CreatedBy   pgtype.UUID
+}
+
+type AttendanceSetting struct {
+	ID                   pgtype.UUID
+	TenantID             pgtype.UUID
+	RegisterDueTime      pgtype.Time
+	EditWindowDays       int32
+	LowAttendancePercent int32
+	UpdatedAt            pgtype.Timestamptz
+	UpdatedBy            pgtype.UUID
+}
+
 type AuditLog struct {
 	ID          int64
 	TenantID    pgtype.UUID
@@ -75,6 +109,27 @@ type Branch struct {
 	IsDefault bool
 	CreatedAt pgtype.Timestamptz
 	CreatedBy pgtype.UUID
+}
+
+type CalendarDay struct {
+	ID        pgtype.UUID
+	TenantID  pgtype.UUID
+	Day       pgtype.Date
+	Kind      string
+	Name      string
+	Status    string
+	CreatedAt pgtype.Timestamptz
+	CreatedBy pgtype.UUID
+	RemovedAt pgtype.Timestamptz
+	RemovedBy pgtype.UUID
+}
+
+type CalendarSetting struct {
+	ID            pgtype.UUID
+	TenantID      pgtype.UUID
+	WeeklyOffDays []int16
+	UpdatedAt     pgtype.Timestamptz
+	UpdatedBy     pgtype.UUID
 }
 
 type Challan struct {

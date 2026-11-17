@@ -25,5 +25,6 @@ An ADR records one significant technical choice: the context, the options, the d
 | 0019 | Staff and roles management | Accepted |
 | 0020 | Payments at the counter | Accepted |
 | 0021 | Advance, refunds and defaulters | Accepted |
+| 0022 | Attendance registers and the school calendar | Accepted |
 
 Still to write when reached: token format and sessions, PDF renderer, observability stack, Terraform layout.

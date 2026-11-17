@@ -57,3 +57,11 @@ sql:
         package: gen
         out: internal/platform/idempotency/store/gen
         sql_package: pgx/v5
+  - engine: postgresql
+    schema: migrations
+    queries: internal/attendance/store/queries
+    gen:
+      go:
+        package: gen
+        out: internal/attendance/store/gen
+        sql_package: pgx/v5

@@ -123,3 +123,28 @@ JOIN students s ON s.tenant_id = l.tenant_id AND s.id = l.student_id
 JOIN guardians g ON g.tenant_id = l.tenant_id AND g.id = l.guardian_id
 WHERE l.tenant_id = sqlc.arg('tenant_id') AND s.family_id = ANY(sqlc.arg('family_ids')::uuid[])
 ORDER BY s.family_id, l.is_fee_payer DESC, l.is_primary DESC, g.full_name;
+
+-- name: SectionRoster :many
+-- Students enrolled in a section on a date: the enrolment began on or before it and had not ended by it.
+-- ended_on is the first day NOT enrolled: a move or withdrawal on a day puts the student in the new section
+-- (or out) for that whole day. Enrolment dates decide, so a student who withdrew yesterday still has a
+-- roster for the days before.
+SELECT s.id, s.registration_no, s.full_name
+FROM enrolments e
+JOIN students s ON s.tenant_id = e.tenant_id AND s.id = e.student_id
+WHERE e.tenant_id = sqlc.arg('tenant_id') AND e.section_id = sqlc.arg('section_id')
+  AND e.started_on <= sqlc.arg('on_day')::date AND (e.ended_on IS NULL OR e.ended_on > sqlc.arg('on_day')::date)
+ORDER BY s.registration_no, s.id;
+
+-- name: StudentBriefs :many
+SELECT id, registration_no, full_name
+FROM students
+WHERE tenant_id = sqlc.arg('tenant_id') AND id = ANY(sqlc.arg('ids')::uuid[]);
+
+-- name: PrimaryContacts :many
+-- One guardian per student to call: the primary guardian, else the fee payer.
+SELECT DISTINCT ON (l.student_id) l.student_id, g.full_name, g.mobile, l.relationship
+FROM guardian_links l
+JOIN guardians g ON g.tenant_id = l.tenant_id AND g.id = l.guardian_id
+WHERE l.tenant_id = sqlc.arg('tenant_id') AND l.student_id = ANY(sqlc.arg('student_ids')::uuid[])
+ORDER BY l.student_id, l.is_primary DESC, l.is_fee_payer DESC, g.full_name;

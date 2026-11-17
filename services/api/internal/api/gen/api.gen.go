@@ -18,6 +18,90 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for AttendanceRecordMethod.
+const (
+	Correction AttendanceRecordMethod = "correction"
+	Manual     AttendanceRecordMethod = "manual"
+	Prefill    AttendanceRecordMethod = "prefill"
+)
+
+// Valid indicates whether the value is a known member of the AttendanceRecordMethod enum.
+func (e AttendanceRecordMethod) Valid() bool {
+	switch e {
+	case Correction:
+		return true
+	case Manual:
+		return true
+	case Prefill:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AttendanceStatus.
+const (
+	AttendanceStatusAbsent  AttendanceStatus = "absent"
+	AttendanceStatusLate    AttendanceStatus = "late"
+	AttendanceStatusLeave   AttendanceStatus = "leave"
+	AttendanceStatusLeft    AttendanceStatus = "left"
+	AttendanceStatusPresent AttendanceStatus = "present"
+)
+
+// Valid indicates whether the value is a known member of the AttendanceStatus enum.
+func (e AttendanceStatus) Valid() bool {
+	switch e {
+	case AttendanceStatusAbsent:
+		return true
+	case AttendanceStatusLate:
+		return true
+	case AttendanceStatusLeave:
+		return true
+	case AttendanceStatusLeft:
+		return true
+	case AttendanceStatusPresent:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CalendarDayStatus.
+const (
+	CalendarDayStatusActive  CalendarDayStatus = "active"
+	CalendarDayStatusRemoved CalendarDayStatus = "removed"
+)
+
+// Valid indicates whether the value is a known member of the CalendarDayStatus enum.
+func (e CalendarDayStatus) Valid() bool {
+	switch e {
+	case CalendarDayStatusActive:
+		return true
+	case CalendarDayStatusRemoved:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CalendarKind.
+const (
+	Holiday CalendarKind = "holiday"
+	Working CalendarKind = "working"
+)
+
+// Valid indicates whether the value is a known member of the CalendarKind enum.
+func (e CalendarKind) Valid() bool {
+	switch e {
+	case Holiday:
+		return true
+	case Working:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ChallanStatus.
 const (
 	Draft    ChallanStatus = "draft"
@@ -273,6 +357,30 @@ func (e LedgerAccountType) Valid() bool {
 	}
 }
 
+// Defines values for MarkStatus.
+const (
+	MarkStatusAbsent  MarkStatus = "absent"
+	MarkStatusLate    MarkStatus = "late"
+	MarkStatusLeave   MarkStatus = "leave"
+	MarkStatusPresent MarkStatus = "present"
+)
+
+// Valid indicates whether the value is a known member of the MarkStatus enum.
+func (e MarkStatus) Valid() bool {
+	switch e {
+	case MarkStatusAbsent:
+		return true
+	case MarkStatusLate:
+		return true
+	case MarkStatusLeave:
+		return true
+	case MarkStatusPresent:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for MoneyCurrency.
 const (
 	PKR MoneyCurrency = "PKR"
@@ -366,6 +474,24 @@ func (e PaymentStatus) Valid() bool {
 	}
 }
 
+// Defines values for RegisterStatus.
+const (
+	Open      RegisterStatus = "open"
+	Submitted RegisterStatus = "submitted"
+)
+
+// Valid indicates whether the value is a known member of the RegisterStatus enum.
+func (e RegisterStatus) Valid() bool {
+	switch e {
+	case Open:
+		return true
+	case Submitted:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for Relationship.
 const (
 	RelationshipAunt        Relationship = "aunt"
@@ -407,15 +533,18 @@ func (e Relationship) Valid() bool {
 
 // Defines values for RoleName.
 const (
-	Accountant   RoleName = "accountant"
-	Owner        RoleName = "owner"
-	Receptionist RoleName = "receptionist"
+	Accountant      RoleName = "accountant"
+	AttendanceClerk RoleName = "attendance_clerk"
+	Owner           RoleName = "owner"
+	Receptionist    RoleName = "receptionist"
 )
 
 // Valid indicates whether the value is a known member of the RoleName enum.
 func (e RoleName) Valid() bool {
 	switch e {
 	case Accountant:
+		return true
+	case AttendanceClerk:
 		return true
 	case Owner:
 		return true
@@ -495,6 +624,29 @@ func (e StudentStatus) Valid() bool {
 	}
 }
 
+// AbsentContact defines model for AbsentContact.
+type AbsentContact struct {
+	Mobile       string `json:"mobile"`
+	Name         string `json:"name"`
+	Relationship string `json:"relationship"`
+}
+
+// AbsentList defines model for AbsentList.
+type AbsentList struct {
+	Date  openapi_types.Date `json:"date"`
+	Items []AbsentStudent    `json:"items"`
+}
+
+// AbsentStudent defines model for AbsentStudent.
+type AbsentStudent struct {
+	Contact        *AbsentContact     `json:"contact,omitempty"`
+	FullName       string             `json:"full_name"`
+	RegistrationNo string             `json:"registration_no"`
+	SectionId      openapi_types.UUID `json:"section_id"`
+	SectionName    string             `json:"section_name"`
+	StudentId      openapi_types.UUID `json:"student_id"`
+}
+
 // AcademicSession defines model for AcademicSession.
 type AcademicSession struct {
 	EndsOn    openapi_types.Date `json:"ends_on"`
@@ -550,6 +702,95 @@ type AllocationInput struct {
 	Amount    Money              `json:"amount"`
 	ChallanId openapi_types.UUID `json:"challan_id"`
 }
+
+// AttendanceRecord defines model for AttendanceRecord.
+type AttendanceRecord struct {
+	// Corrected True when changed after the register was submitted.
+	Corrected      bool                   `json:"corrected"`
+	FullName       string                 `json:"full_name"`
+	Method         AttendanceRecordMethod `json:"method"`
+	RegistrationNo string                 `json:"registration_no"`
+
+	// Status `left` appears only on a submitted register, for a student who moved to another section or withdrew
+	// that day; they are not counted anywhere.
+	Status    AttendanceStatus   `json:"status"`
+	StudentId openapi_types.UUID `json:"student_id"`
+
+	// Version 1 for the first entry; each change adds one.
+	Version int `json:"version"`
+}
+
+// AttendanceRecordMethod defines model for AttendanceRecord.Method.
+type AttendanceRecordMethod string
+
+// AttendanceSettings defines model for AttendanceSettings.
+type AttendanceSettings struct {
+	// EditWindowDays How many days back `attendance.edit_within_window` may correct a submitted register.
+	EditWindowDays       int `json:"edit_window_days"`
+	LowAttendancePercent int `json:"low_attendance_percent"`
+
+	// RegisterDueTime HH:MM in Asia/Karachi. A register not submitted by then is reported missing.
+	//
+	// Example: 10:00
+	RegisterDueTime string `json:"register_due_time"`
+}
+
+// AttendanceStatus `left` appears only on a submitted register, for a student who moved to another section or withdrew
+// that day; they are not counted anywhere.
+type AttendanceStatus string
+
+// AttendanceTotals defines model for AttendanceTotals.
+type AttendanceTotals struct {
+	Absent int `json:"absent"`
+
+	// ExpectedDays present + late + absent; leave is excused.
+	ExpectedDays int `json:"expected_days"`
+	Late         int `json:"late"`
+	Leave        int `json:"leave"`
+
+	// Percent (present + late) / expected_days, as a percentage with one decimal; 100 when there are no expected days.
+	Percent float32 `json:"percent"`
+	Present int     `json:"present"`
+}
+
+// Calendar defines model for Calendar.
+type Calendar struct {
+	// Days The active entries in the range.
+	Days          []CalendarDay      `json:"days"`
+	From          openapi_types.Date `json:"from"`
+	To            openapi_types.Date `json:"to"`
+	WeeklyOffDays []int              `json:"weekly_off_days"`
+}
+
+// CalendarDay defines model for CalendarDay.
+type CalendarDay struct {
+	Date   openapi_types.Date `json:"date"`
+	Id     openapi_types.UUID `json:"id"`
+	Kind   CalendarKind       `json:"kind"`
+	Name   string             `json:"name"`
+	Status CalendarDayStatus  `json:"status"`
+}
+
+// CalendarDayStatus defines model for CalendarDay.Status.
+type CalendarDayStatus string
+
+// CalendarDayList defines model for CalendarDayList.
+type CalendarDayList struct {
+	Items []CalendarDay `json:"items"`
+}
+
+// CalendarDaysCreate defines model for CalendarDaysCreate.
+type CalendarDaysCreate struct {
+	From openapi_types.Date `json:"from"`
+	Kind CalendarKind       `json:"kind"`
+	Name string             `json:"name"`
+
+	// To Last date (inclusive); omit for one day. At most 60 dates.
+	To *openapi_types.Date `json:"to,omitempty"`
+}
+
+// CalendarKind defines model for CalendarKind.
+type CalendarKind string
 
 // Challan defines model for Challan.
 type Challan struct {
@@ -641,6 +882,14 @@ type ClassCreate struct {
 // ClassList defines model for ClassList.
 type ClassList struct {
 	Items []Class `json:"items"`
+}
+
+// DailySummary defines model for DailySummary.
+type DailySummary struct {
+	Date      openapi_types.Date `json:"date"`
+	SchoolDay bool               `json:"school_day"`
+	Sections  []SectionDay       `json:"sections"`
+	Totals    RegisterCounts     `json:"totals"`
 }
 
 // Defaulter defines model for Defaulter.
@@ -988,6 +1237,42 @@ type LedgerAccountList struct {
 	Items []LedgerAccount `json:"items"`
 }
 
+// LowAttendanceItem defines model for LowAttendanceItem.
+type LowAttendanceItem struct {
+	FullName       string             `json:"full_name"`
+	RegistrationNo string             `json:"registration_no"`
+	StudentId      openapi_types.UUID `json:"student_id"`
+	Totals         AttendanceTotals   `json:"totals"`
+}
+
+// LowAttendanceList defines model for LowAttendanceList.
+type LowAttendanceList struct {
+	From      openapi_types.Date  `json:"from"`
+	Items     []LowAttendanceItem `json:"items"`
+	Threshold int                 `json:"threshold"`
+	To        openapi_types.Date  `json:"to"`
+}
+
+// MarkStatus The statuses a person can set.
+type MarkStatus string
+
+// MissingRegister defines model for MissingRegister.
+type MissingRegister struct {
+	// HasOpenRegister A register was opened but never submitted.
+	HasOpenRegister *bool              `json:"has_open_register,omitempty"`
+	SectionId       openapi_types.UUID `json:"section_id"`
+	SectionName     string             `json:"section_name"`
+}
+
+// MissingRegisters defines model for MissingRegisters.
+type MissingRegisters struct {
+	Date      openapi_types.Date `json:"date"`
+	DueTime   string             `json:"due_time"`
+	Items     []MissingRegister  `json:"items"`
+	Overdue   bool               `json:"overdue"`
+	SchoolDay bool               `json:"school_day"`
+}
+
 // Mobile Pakistani mobile, as 03XXXXXXXXX or +923XXXXXXXXX. Stored as E.164.
 //
 // Example: 03001234567
@@ -1186,6 +1471,75 @@ type PlanLineSet struct {
 	Remove *bool `json:"remove,omitempty"`
 }
 
+// RecordCorrection defines model for RecordCorrection.
+type RecordCorrection struct {
+	Reason string `json:"reason"`
+
+	// Status The statuses a person can set.
+	Status    MarkStatus         `json:"status"`
+	StudentId openapi_types.UUID `json:"student_id"`
+}
+
+// RecordMark defines model for RecordMark.
+type RecordMark struct {
+	// Status The statuses a person can set.
+	Status    MarkStatus         `json:"status"`
+	StudentId openapi_types.UUID `json:"student_id"`
+}
+
+// RecordsMark defines model for RecordsMark.
+type RecordsMark struct {
+	Marks []RecordMark `json:"marks"`
+}
+
+// Register defines model for Register.
+type Register struct {
+	Counts      RegisterCounts     `json:"counts"`
+	Date        openapi_types.Date `json:"date"`
+	Id          openapi_types.UUID `json:"id"`
+	Records     []AttendanceRecord `json:"records"`
+	SectionId   openapi_types.UUID `json:"section_id"`
+	SectionName *string            `json:"section_name,omitempty"`
+	Status      RegisterStatus     `json:"status"`
+	SubmittedAt *time.Time         `json:"submitted_at,omitempty"`
+}
+
+// RegisterBrief defines model for RegisterBrief.
+type RegisterBrief struct {
+	Counts      RegisterCounts     `json:"counts"`
+	Date        openapi_types.Date `json:"date"`
+	Id          openapi_types.UUID `json:"id"`
+	SectionId   openapi_types.UUID `json:"section_id"`
+	SectionName string             `json:"section_name"`
+	Status      RegisterStatus     `json:"status"`
+	SubmittedAt *time.Time         `json:"submitted_at,omitempty"`
+}
+
+// RegisterCounts defines model for RegisterCounts.
+type RegisterCounts struct {
+	Absent  int `json:"absent"`
+	Late    int `json:"late"`
+	Leave   int `json:"leave"`
+	Present int `json:"present"`
+
+	// Students Students on the register who are counted (not those who left). Leave is included here.
+	Students int `json:"students"`
+}
+
+// RegisterList defines model for RegisterList.
+type RegisterList struct {
+	Items []RegisterBrief `json:"items"`
+}
+
+// RegisterOpen defines model for RegisterOpen.
+type RegisterOpen struct {
+	Date      openapi_types.Date `json:"date"`
+	SectionId openapi_types.UUID `json:"section_id"`
+}
+
+// RegisterStatus defines model for RegisterStatus.
+type RegisterStatus string
+
 // Relationship A guardian's relation to the student (REQ-STU-002).
 type Relationship string
 
@@ -1237,6 +1591,14 @@ type SectionCreate struct {
 
 	// Shift A shift is a property of a section (REQ-ORG-005).
 	Shift Shift `json:"shift"`
+}
+
+// SectionDay defines model for SectionDay.
+type SectionDay struct {
+	Counts      RegisterCounts     `json:"counts"`
+	SectionId   openapi_types.UUID `json:"section_id"`
+	SectionName string             `json:"section_name"`
+	Submitted   bool               `json:"submitted"`
 }
 
 // SectionList defines model for SectionList.
@@ -1316,6 +1678,15 @@ type Student struct {
 // StudentStatus defines model for Student.Status.
 type StudentStatus string
 
+// StudentAttendance defines model for StudentAttendance.
+type StudentAttendance struct {
+	Days      []StudentDay       `json:"days"`
+	From      openapi_types.Date `json:"from"`
+	StudentId openapi_types.UUID `json:"student_id"`
+	To        openapi_types.Date `json:"to"`
+	Totals    AttendanceTotals   `json:"totals"`
+}
+
 // StudentCreate defines model for StudentCreate.
 type StudentCreate struct {
 	// DateOfBirth Example: 2018-04-12
@@ -1333,6 +1704,18 @@ type StudentCreate struct {
 
 	// SectionId The section to enrol in, in the branch's current session (REQ-STU-001).
 	SectionId openapi_types.UUID `json:"section_id"`
+}
+
+// StudentDay defines model for StudentDay.
+type StudentDay struct {
+	Corrected bool               `json:"corrected"`
+	Date      openapi_types.Date `json:"date"`
+	Method    string             `json:"method"`
+	SectionId openapi_types.UUID `json:"section_id"`
+
+	// Status `left` appears only on a submitted register, for a student who moved to another section or withdrew
+	// that day; they are not counted anywhere.
+	Status AttendanceStatus `json:"status"`
 }
 
 // StudentPage defines model for StudentPage.
@@ -1402,6 +1785,11 @@ type VoidChallan struct {
 	Reason string `json:"reason"`
 }
 
+// WeeklyOffSet defines model for WeeklyOffSet.
+type WeeklyOffSet struct {
+	Days []int `json:"days"`
+}
+
 // IdempotencyKey defines model for IdempotencyKey.
 type IdempotencyKey = string
 
@@ -1431,6 +1819,49 @@ type Unauthenticated = ErrorEnvelope
 
 // ValidationError defines model for ValidationError.
 type ValidationError = ErrorEnvelope
+
+// ListAbsentTodayParams defines parameters for ListAbsentToday.
+type ListAbsentTodayParams struct {
+	// Date Required; a missing value is a 400 `attendance.date_invalid` (checked after the permission).
+	Date *openapi_types.Date `form:"date,omitempty" json:"date,omitempty"`
+}
+
+// ListLowAttendanceParams defines parameters for ListLowAttendance.
+type ListLowAttendanceParams struct {
+	// From Required; a missing value is a 400 `attendance.date_invalid` (checked after the permission).
+	From *openapi_types.Date `form:"from,omitempty" json:"from,omitempty"`
+
+	// To Required; a missing value is a 400 `attendance.date_invalid` (checked after the permission).
+	To        *openapi_types.Date `form:"to,omitempty" json:"to,omitempty"`
+	Threshold *int                `form:"threshold,omitempty" json:"threshold,omitempty"`
+}
+
+// ListMissingRegistersParams defines parameters for ListMissingRegisters.
+type ListMissingRegistersParams struct {
+	// Date Required; a missing value is a 400 `attendance.date_invalid` (checked after the permission).
+	Date *openapi_types.Date `form:"date,omitempty" json:"date,omitempty"`
+}
+
+// ListRegistersParams defines parameters for ListRegisters.
+type ListRegistersParams struct {
+	// Date Required; a missing value is a 400 `attendance.date_invalid` (checked after the permission).
+	Date *openapi_types.Date `form:"date,omitempty" json:"date,omitempty"`
+}
+
+// GetAttendanceSummaryParams defines parameters for GetAttendanceSummary.
+type GetAttendanceSummaryParams struct {
+	// Date Required; a missing value is a 400 `attendance.date_invalid` (checked after the permission).
+	Date *openapi_types.Date `form:"date,omitempty" json:"date,omitempty"`
+}
+
+// GetCalendarParams defines parameters for GetCalendar.
+type GetCalendarParams struct {
+	// From Defaults to the first day of the current month (Asia/Karachi).
+	From *openapi_types.Date `form:"from,omitempty" json:"from,omitempty"`
+
+	// To Defaults to the last day of the month of `from`. At most 366 days.
+	To *openapi_types.Date `form:"to,omitempty" json:"to,omitempty"`
+}
 
 // ListChallansParams defines parameters for ListChallans.
 type ListChallansParams struct {
@@ -1595,17 +2026,44 @@ type CreateStudentParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
+// GetStudentAttendanceParams defines parameters for GetStudentAttendance.
+type GetStudentAttendanceParams struct {
+	// From Required; a missing value is a 400 `attendance.date_invalid` (checked after the permission).
+	From *openapi_types.Date `form:"from,omitempty" json:"from,omitempty"`
+
+	// To Required; a missing value is a 400 `attendance.date_invalid` (checked after the permission).
+	To *openapi_types.Date `form:"to,omitempty" json:"to,omitempty"`
+}
+
 // GetFeeStructureParams defines parameters for GetFeeStructure.
 type GetFeeStructureParams struct {
 	// Month Any date in the month. Defaults to the current month (Asia/Karachi).
 	Month *openapi_types.Date `form:"month,omitempty" json:"month,omitempty"`
 }
 
+// OpenRegisterJSONRequestBody defines body for OpenRegister for application/json ContentType.
+type OpenRegisterJSONRequestBody = RegisterOpen
+
+// CorrectRecordJSONRequestBody defines body for CorrectRecord for application/json ContentType.
+type CorrectRecordJSONRequestBody = RecordCorrection
+
+// MarkRecordsJSONRequestBody defines body for MarkRecords for application/json ContentType.
+type MarkRecordsJSONRequestBody = RecordsMark
+
+// SetAttendanceSettingsJSONRequestBody defines body for SetAttendanceSettings for application/json ContentType.
+type SetAttendanceSettingsJSONRequestBody = AttendanceSettings
+
 // RequestOtpJSONRequestBody defines body for RequestOtp for application/json ContentType.
 type RequestOtpJSONRequestBody = OtpRequest
 
 // VerifyOtpJSONRequestBody defines body for VerifyOtp for application/json ContentType.
 type VerifyOtpJSONRequestBody = OtpVerify
+
+// AddCalendarDaysJSONRequestBody defines body for AddCalendarDays for application/json ContentType.
+type AddCalendarDaysJSONRequestBody = CalendarDaysCreate
+
+// SetWeeklyOffJSONRequestBody defines body for SetWeeklyOff for application/json ContentType.
+type SetWeeklyOffJSONRequestBody = WeeklyOffSet
 
 // GenerateChallansJSONRequestBody defines body for GenerateChallans for application/json ContentType.
 type GenerateChallansJSONRequestBody = GenerateChallans
@@ -1663,12 +2121,60 @@ type ServerInterface interface {
 	// ListLedgerAccounts List the school's ledger accounts
 	// (GET /api/v1/accounts)
 	ListLedgerAccounts(w http.ResponseWriter, r *http.Request)
+	// ListAbsentToday Students marked absent on a date, with a contact to call
+	// (GET /api/v1/attendance/absent)
+	ListAbsentToday(w http.ResponseWriter, r *http.Request, params ListAbsentTodayParams)
+	// ListLowAttendance Students whose attendance is below a threshold over a period
+	// (GET /api/v1/attendance/low)
+	ListLowAttendance(w http.ResponseWriter, r *http.Request, params ListLowAttendanceParams)
+	// ListMissingRegisters Sections with no submitted register once the due time has passed
+	// (GET /api/v1/attendance/missing-registers)
+	ListMissingRegisters(w http.ResponseWriter, r *http.Request, params ListMissingRegistersParams)
+	// ListRegisters The registers opened for a date, without their records
+	// (GET /api/v1/attendance/registers)
+	ListRegisters(w http.ResponseWriter, r *http.Request, params ListRegistersParams)
+	// OpenRegister Open the register of a section for a date (or return it if it is already open)
+	// (POST /api/v1/attendance/registers)
+	OpenRegister(w http.ResponseWriter, r *http.Request)
+	// GetRegister One register with every student's current status
+	// (GET /api/v1/attendance/registers/{registerId})
+	GetRegister(w http.ResponseWriter, r *http.Request, registerId openapi_types.UUID)
+	// CorrectRecord Correct one student's status in a submitted register
+	// (POST /api/v1/attendance/registers/{registerId}/corrections)
+	CorrectRecord(w http.ResponseWriter, r *http.Request, registerId openapi_types.UUID)
+	// MarkRecords Change students' statuses in an open register
+	// (PUT /api/v1/attendance/registers/{registerId}/records)
+	MarkRecords(w http.ResponseWriter, r *http.Request, registerId openapi_types.UUID)
+	// SubmitRegister Submit the register
+	// (POST /api/v1/attendance/registers/{registerId}/submit)
+	SubmitRegister(w http.ResponseWriter, r *http.Request, registerId openapi_types.UUID)
+	// GetAttendanceSettings The school's attendance settings
+	// (GET /api/v1/attendance/settings)
+	GetAttendanceSettings(w http.ResponseWriter, r *http.Request)
+	// SetAttendanceSettings Change the attendance settings
+	// (PUT /api/v1/attendance/settings)
+	SetAttendanceSettings(w http.ResponseWriter, r *http.Request)
+	// GetAttendanceSummary One day's attendance, section by section
+	// (GET /api/v1/attendance/summary)
+	GetAttendanceSummary(w http.ResponseWriter, r *http.Request, params GetAttendanceSummaryParams)
 	// RequestOtp Send a one-time code to a mobile number
 	// (POST /api/v1/auth/otp/request)
 	RequestOtp(w http.ResponseWriter, r *http.Request)
 	// VerifyOtp Exchange a one-time code for a session token in one tenant
 	// (POST /api/v1/auth/otp/verify)
 	VerifyOtp(w http.ResponseWriter, r *http.Request)
+	// GetCalendar The school calendar: weekly off days and the listed days in a date range
+	// (GET /api/v1/calendar)
+	GetCalendar(w http.ResponseWriter, r *http.Request, params GetCalendarParams)
+	// AddCalendarDays Add a holiday or a special working day, for one date or a range
+	// (POST /api/v1/calendar/days)
+	AddCalendarDays(w http.ResponseWriter, r *http.Request)
+	// RemoveCalendarDay Remove a holiday or working day from the calendar
+	// (POST /api/v1/calendar/days/{dayId}/remove)
+	RemoveCalendarDay(w http.ResponseWriter, r *http.Request, dayId openapi_types.UUID)
+	// SetWeeklyOff Set the weekly off days
+	// (PUT /api/v1/calendar/weekly-off)
+	SetWeeklyOff(w http.ResponseWriter, r *http.Request)
 	// ListChallans List challans (cursor paginated, newest first)
 	// (GET /api/v1/challans)
 	ListChallans(w http.ResponseWriter, r *http.Request, params ListChallansParams)
@@ -1792,6 +2298,9 @@ type ServerInterface interface {
 	// GetStudent Read one student with guardians
 	// (GET /api/v1/students/{studentId})
 	GetStudent(w http.ResponseWriter, r *http.Request, studentId openapi_types.UUID)
+	// GetStudentAttendance One student's attendance over a period
+	// (GET /api/v1/students/{studentId}/attendance)
+	GetStudentAttendance(w http.ResponseWriter, r *http.Request, studentId openapi_types.UUID, params GetStudentAttendanceParams)
 	// ChangeStudentSection Move a student to another section, keeping history
 	// (POST /api/v1/students/{studentId}/change-section)
 	ChangeStudentSection(w http.ResponseWriter, r *http.Request, studentId openapi_types.UUID)
@@ -1838,6 +2347,343 @@ func (siw *ServerInterfaceWrapper) ListLedgerAccounts(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
+// ListAbsentToday operation middleware
+func (siw *ServerInterfaceWrapper) ListAbsentToday(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListAbsentTodayParams
+
+	// ------------- Optional query parameter "date" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "date", r.URL.Query(), &params.Date, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "date"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "date", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAbsentToday(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListLowAttendance operation middleware
+func (siw *ServerInterfaceWrapper) ListLowAttendance(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListLowAttendanceParams
+
+	// ------------- Optional query parameter "from" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "from", r.URL.Query(), &params.From, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "from"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "from", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "to" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "to", r.URL.Query(), &params.To, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "to"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "to", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "threshold" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "threshold", r.URL.Query(), &params.Threshold, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "threshold"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "threshold", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListLowAttendance(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListMissingRegisters operation middleware
+func (siw *ServerInterfaceWrapper) ListMissingRegisters(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListMissingRegistersParams
+
+	// ------------- Optional query parameter "date" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "date", r.URL.Query(), &params.Date, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "date"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "date", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMissingRegisters(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListRegisters operation middleware
+func (siw *ServerInterfaceWrapper) ListRegisters(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListRegistersParams
+
+	// ------------- Optional query parameter "date" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "date", r.URL.Query(), &params.Date, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "date"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "date", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRegisters(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// OpenRegister operation middleware
+func (siw *ServerInterfaceWrapper) OpenRegister(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.OpenRegister(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetRegister operation middleware
+func (siw *ServerInterfaceWrapper) GetRegister(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "registerId" -------------
+	var registerId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "registerId", r.PathValue("registerId"), &registerId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "registerId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRegister(w, r, registerId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CorrectRecord operation middleware
+func (siw *ServerInterfaceWrapper) CorrectRecord(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "registerId" -------------
+	var registerId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "registerId", r.PathValue("registerId"), &registerId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "registerId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CorrectRecord(w, r, registerId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// MarkRecords operation middleware
+func (siw *ServerInterfaceWrapper) MarkRecords(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "registerId" -------------
+	var registerId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "registerId", r.PathValue("registerId"), &registerId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "registerId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.MarkRecords(w, r, registerId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SubmitRegister operation middleware
+func (siw *ServerInterfaceWrapper) SubmitRegister(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "registerId" -------------
+	var registerId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "registerId", r.PathValue("registerId"), &registerId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "registerId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SubmitRegister(w, r, registerId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAttendanceSettings operation middleware
+func (siw *ServerInterfaceWrapper) GetAttendanceSettings(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAttendanceSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetAttendanceSettings operation middleware
+func (siw *ServerInterfaceWrapper) SetAttendanceSettings(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetAttendanceSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAttendanceSummary operation middleware
+func (siw *ServerInterfaceWrapper) GetAttendanceSummary(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetAttendanceSummaryParams
+
+	// ------------- Optional query parameter "date" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "date", r.URL.Query(), &params.Date, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "date"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "date", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAttendanceSummary(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // RequestOtp operation middleware
 func (siw *ServerInterfaceWrapper) RequestOtp(w http.ResponseWriter, r *http.Request) {
 
@@ -1857,6 +2703,106 @@ func (siw *ServerInterfaceWrapper) VerifyOtp(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.VerifyOtp(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetCalendar operation middleware
+func (siw *ServerInterfaceWrapper) GetCalendar(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetCalendarParams
+
+	// ------------- Optional query parameter "from" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "from", r.URL.Query(), &params.From, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "from"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "from", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "to" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "to", r.URL.Query(), &params.To, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "to"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "to", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetCalendar(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AddCalendarDays operation middleware
+func (siw *ServerInterfaceWrapper) AddCalendarDays(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddCalendarDays(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RemoveCalendarDay operation middleware
+func (siw *ServerInterfaceWrapper) RemoveCalendarDay(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "dayId" -------------
+	var dayId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "dayId", r.PathValue("dayId"), &dayId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "dayId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemoveCalendarDay(w, r, dayId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetWeeklyOff operation middleware
+func (siw *ServerInterfaceWrapper) SetWeeklyOff(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetWeeklyOff(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3207,6 +4153,61 @@ func (siw *ServerInterfaceWrapper) GetStudent(w http.ResponseWriter, r *http.Req
 	handler.ServeHTTP(w, r)
 }
 
+// GetStudentAttendance operation middleware
+func (siw *ServerInterfaceWrapper) GetStudentAttendance(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "studentId" -------------
+	var studentId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "studentId", r.PathValue("studentId"), &studentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "studentId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetStudentAttendanceParams
+
+	// ------------- Optional query parameter "from" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "from", r.URL.Query(), &params.From, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "from"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "from", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "to" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "to", r.URL.Query(), &params.To, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "to"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "to", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetStudentAttendance(w, r, studentId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ChangeStudentSection operation middleware
 func (siw *ServerInterfaceWrapper) ChangeStudentSection(w http.ResponseWriter, r *http.Request) {
 
@@ -3552,6 +4553,23 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/families/{familyId}/dues", wrapper.GetFamilyDues)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/payments/{paymentId}/refund", wrapper.RefundAdvance)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/defaulters", wrapper.ListDefaulters)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/calendar", wrapper.GetCalendar)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/calendar/weekly-off", wrapper.SetWeeklyOff)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/calendar/days", wrapper.AddCalendarDays)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/calendar/days/{dayId}/remove", wrapper.RemoveCalendarDay)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/attendance/settings", wrapper.GetAttendanceSettings)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/attendance/settings", wrapper.SetAttendanceSettings)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/attendance/registers", wrapper.ListRegisters)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/attendance/registers", wrapper.OpenRegister)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/attendance/registers/{registerId}", wrapper.GetRegister)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/attendance/registers/{registerId}/records", wrapper.MarkRecords)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/attendance/registers/{registerId}/submit", wrapper.SubmitRegister)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/attendance/registers/{registerId}/corrections", wrapper.CorrectRecord)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/attendance/missing-registers", wrapper.ListMissingRegisters)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/attendance/summary", wrapper.GetAttendanceSummary)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/attendance/absent", wrapper.ListAbsentToday)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/attendance/low", wrapper.ListLowAttendance)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/students/{studentId}/attendance", wrapper.GetStudentAttendance)
 
 	return m
 }
@@ -3626,6 +4644,1055 @@ func (response ListLedgerAccounts403JSONResponse) VisitListLedgerAccountsRespons
 type ListLedgerAccounts500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response ListLedgerAccounts500JSONResponse) VisitListLedgerAccountsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAbsentTodayRequestObject struct {
+	Params ListAbsentTodayParams
+}
+
+type ListAbsentTodayResponseObject interface {
+	VisitListAbsentTodayResponse(w http.ResponseWriter) error
+}
+
+type ListAbsentToday200JSONResponse AbsentList
+
+func (response ListAbsentToday200JSONResponse) VisitListAbsentTodayResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAbsentToday400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response ListAbsentToday400JSONResponse) VisitListAbsentTodayResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAbsentToday401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ListAbsentToday401JSONResponse) VisitListAbsentTodayResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAbsentToday403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListAbsentToday403JSONResponse) VisitListAbsentTodayResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAbsentToday500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListAbsentToday500JSONResponse) VisitListAbsentTodayResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListLowAttendanceRequestObject struct {
+	Params ListLowAttendanceParams
+}
+
+type ListLowAttendanceResponseObject interface {
+	VisitListLowAttendanceResponse(w http.ResponseWriter) error
+}
+
+type ListLowAttendance200JSONResponse LowAttendanceList
+
+func (response ListLowAttendance200JSONResponse) VisitListLowAttendanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListLowAttendance400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response ListLowAttendance400JSONResponse) VisitListLowAttendanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListLowAttendance401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ListLowAttendance401JSONResponse) VisitListLowAttendanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListLowAttendance403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListLowAttendance403JSONResponse) VisitListLowAttendanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListLowAttendance500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListLowAttendance500JSONResponse) VisitListLowAttendanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMissingRegistersRequestObject struct {
+	Params ListMissingRegistersParams
+}
+
+type ListMissingRegistersResponseObject interface {
+	VisitListMissingRegistersResponse(w http.ResponseWriter) error
+}
+
+type ListMissingRegisters200JSONResponse MissingRegisters
+
+func (response ListMissingRegisters200JSONResponse) VisitListMissingRegistersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMissingRegisters400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response ListMissingRegisters400JSONResponse) VisitListMissingRegistersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMissingRegisters401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ListMissingRegisters401JSONResponse) VisitListMissingRegistersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMissingRegisters403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListMissingRegisters403JSONResponse) VisitListMissingRegistersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMissingRegisters500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListMissingRegisters500JSONResponse) VisitListMissingRegistersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRegistersRequestObject struct {
+	Params ListRegistersParams
+}
+
+type ListRegistersResponseObject interface {
+	VisitListRegistersResponse(w http.ResponseWriter) error
+}
+
+type ListRegisters200JSONResponse RegisterList
+
+func (response ListRegisters200JSONResponse) VisitListRegistersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRegisters400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response ListRegisters400JSONResponse) VisitListRegistersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRegisters401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ListRegisters401JSONResponse) VisitListRegistersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRegisters403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListRegisters403JSONResponse) VisitListRegistersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRegisters500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListRegisters500JSONResponse) VisitListRegistersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type OpenRegisterRequestObject struct {
+	Body *OpenRegisterJSONRequestBody
+}
+
+type OpenRegisterResponseObject interface {
+	VisitOpenRegisterResponse(w http.ResponseWriter) error
+}
+
+type OpenRegister200JSONResponse Register
+
+func (response OpenRegister200JSONResponse) VisitOpenRegisterResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type OpenRegister400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response OpenRegister400JSONResponse) VisitOpenRegisterResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type OpenRegister401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response OpenRegister401JSONResponse) VisitOpenRegisterResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type OpenRegister403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response OpenRegister403JSONResponse) VisitOpenRegisterResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type OpenRegister404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response OpenRegister404JSONResponse) VisitOpenRegisterResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type OpenRegister409JSONResponse struct{ ConflictJSONResponse }
+
+func (response OpenRegister409JSONResponse) VisitOpenRegisterResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type OpenRegister500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response OpenRegister500JSONResponse) VisitOpenRegisterResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRegisterRequestObject struct {
+	RegisterId openapi_types.UUID `json:"registerId"`
+}
+
+type GetRegisterResponseObject interface {
+	VisitGetRegisterResponse(w http.ResponseWriter) error
+}
+
+type GetRegister200JSONResponse Register
+
+func (response GetRegister200JSONResponse) VisitGetRegisterResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRegister400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response GetRegister400JSONResponse) VisitGetRegisterResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRegister401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response GetRegister401JSONResponse) VisitGetRegisterResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRegister403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetRegister403JSONResponse) VisitGetRegisterResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRegister404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetRegister404JSONResponse) VisitGetRegisterResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRegister500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GetRegister500JSONResponse) VisitGetRegisterResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CorrectRecordRequestObject struct {
+	RegisterId openapi_types.UUID `json:"registerId"`
+	Body       *CorrectRecordJSONRequestBody
+}
+
+type CorrectRecordResponseObject interface {
+	VisitCorrectRecordResponse(w http.ResponseWriter) error
+}
+
+type CorrectRecord200JSONResponse Register
+
+func (response CorrectRecord200JSONResponse) VisitCorrectRecordResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CorrectRecord400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response CorrectRecord400JSONResponse) VisitCorrectRecordResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CorrectRecord401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response CorrectRecord401JSONResponse) VisitCorrectRecordResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CorrectRecord403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CorrectRecord403JSONResponse) VisitCorrectRecordResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CorrectRecord404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CorrectRecord404JSONResponse) VisitCorrectRecordResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CorrectRecord409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CorrectRecord409JSONResponse) VisitCorrectRecordResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CorrectRecord500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response CorrectRecord500JSONResponse) VisitCorrectRecordResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MarkRecordsRequestObject struct {
+	RegisterId openapi_types.UUID `json:"registerId"`
+	Body       *MarkRecordsJSONRequestBody
+}
+
+type MarkRecordsResponseObject interface {
+	VisitMarkRecordsResponse(w http.ResponseWriter) error
+}
+
+type MarkRecords200JSONResponse Register
+
+func (response MarkRecords200JSONResponse) VisitMarkRecordsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MarkRecords400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response MarkRecords400JSONResponse) VisitMarkRecordsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MarkRecords401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response MarkRecords401JSONResponse) VisitMarkRecordsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MarkRecords403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response MarkRecords403JSONResponse) VisitMarkRecordsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MarkRecords404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response MarkRecords404JSONResponse) VisitMarkRecordsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MarkRecords409JSONResponse struct{ ConflictJSONResponse }
+
+func (response MarkRecords409JSONResponse) VisitMarkRecordsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MarkRecords500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response MarkRecords500JSONResponse) VisitMarkRecordsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SubmitRegisterRequestObject struct {
+	RegisterId openapi_types.UUID `json:"registerId"`
+}
+
+type SubmitRegisterResponseObject interface {
+	VisitSubmitRegisterResponse(w http.ResponseWriter) error
+}
+
+type SubmitRegister200JSONResponse Register
+
+func (response SubmitRegister200JSONResponse) VisitSubmitRegisterResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SubmitRegister400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response SubmitRegister400JSONResponse) VisitSubmitRegisterResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SubmitRegister401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response SubmitRegister401JSONResponse) VisitSubmitRegisterResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SubmitRegister403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response SubmitRegister403JSONResponse) VisitSubmitRegisterResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SubmitRegister404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response SubmitRegister404JSONResponse) VisitSubmitRegisterResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SubmitRegister409JSONResponse struct{ ConflictJSONResponse }
+
+func (response SubmitRegister409JSONResponse) VisitSubmitRegisterResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SubmitRegister500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response SubmitRegister500JSONResponse) VisitSubmitRegisterResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAttendanceSettingsRequestObject struct {
+}
+
+type GetAttendanceSettingsResponseObject interface {
+	VisitGetAttendanceSettingsResponse(w http.ResponseWriter) error
+}
+
+type GetAttendanceSettings200JSONResponse AttendanceSettings
+
+func (response GetAttendanceSettings200JSONResponse) VisitGetAttendanceSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAttendanceSettings401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response GetAttendanceSettings401JSONResponse) VisitGetAttendanceSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAttendanceSettings403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetAttendanceSettings403JSONResponse) VisitGetAttendanceSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAttendanceSettings500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GetAttendanceSettings500JSONResponse) VisitGetAttendanceSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAttendanceSettingsRequestObject struct {
+	Body *SetAttendanceSettingsJSONRequestBody
+}
+
+type SetAttendanceSettingsResponseObject interface {
+	VisitSetAttendanceSettingsResponse(w http.ResponseWriter) error
+}
+
+type SetAttendanceSettings200JSONResponse AttendanceSettings
+
+func (response SetAttendanceSettings200JSONResponse) VisitSetAttendanceSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAttendanceSettings400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response SetAttendanceSettings400JSONResponse) VisitSetAttendanceSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAttendanceSettings401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response SetAttendanceSettings401JSONResponse) VisitSetAttendanceSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAttendanceSettings403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response SetAttendanceSettings403JSONResponse) VisitSetAttendanceSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAttendanceSettings500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response SetAttendanceSettings500JSONResponse) VisitSetAttendanceSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAttendanceSummaryRequestObject struct {
+	Params GetAttendanceSummaryParams
+}
+
+type GetAttendanceSummaryResponseObject interface {
+	VisitGetAttendanceSummaryResponse(w http.ResponseWriter) error
+}
+
+type GetAttendanceSummary200JSONResponse DailySummary
+
+func (response GetAttendanceSummary200JSONResponse) VisitGetAttendanceSummaryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAttendanceSummary400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response GetAttendanceSummary400JSONResponse) VisitGetAttendanceSummaryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAttendanceSummary401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response GetAttendanceSummary401JSONResponse) VisitGetAttendanceSummaryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAttendanceSummary403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetAttendanceSummary403JSONResponse) VisitGetAttendanceSummaryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAttendanceSummary500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GetAttendanceSummary500JSONResponse) VisitGetAttendanceSummaryResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -3754,6 +5821,360 @@ func (response VerifyOtp423JSONResponse) VisitVerifyOtpResponse(w http.ResponseW
 type VerifyOtp500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response VerifyOtp500JSONResponse) VisitVerifyOtpResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCalendarRequestObject struct {
+	Params GetCalendarParams
+}
+
+type GetCalendarResponseObject interface {
+	VisitGetCalendarResponse(w http.ResponseWriter) error
+}
+
+type GetCalendar200JSONResponse Calendar
+
+func (response GetCalendar200JSONResponse) VisitGetCalendarResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCalendar400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response GetCalendar400JSONResponse) VisitGetCalendarResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCalendar401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response GetCalendar401JSONResponse) VisitGetCalendarResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCalendar403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetCalendar403JSONResponse) VisitGetCalendarResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCalendar500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GetCalendar500JSONResponse) VisitGetCalendarResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddCalendarDaysRequestObject struct {
+	Body *AddCalendarDaysJSONRequestBody
+}
+
+type AddCalendarDaysResponseObject interface {
+	VisitAddCalendarDaysResponse(w http.ResponseWriter) error
+}
+
+type AddCalendarDays201JSONResponse CalendarDayList
+
+func (response AddCalendarDays201JSONResponse) VisitAddCalendarDaysResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddCalendarDays400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response AddCalendarDays400JSONResponse) VisitAddCalendarDaysResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddCalendarDays401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response AddCalendarDays401JSONResponse) VisitAddCalendarDaysResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddCalendarDays403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response AddCalendarDays403JSONResponse) VisitAddCalendarDaysResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddCalendarDays409JSONResponse struct{ ConflictJSONResponse }
+
+func (response AddCalendarDays409JSONResponse) VisitAddCalendarDaysResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddCalendarDays500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response AddCalendarDays500JSONResponse) VisitAddCalendarDaysResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveCalendarDayRequestObject struct {
+	DayId openapi_types.UUID `json:"dayId"`
+}
+
+type RemoveCalendarDayResponseObject interface {
+	VisitRemoveCalendarDayResponse(w http.ResponseWriter) error
+}
+
+type RemoveCalendarDay200JSONResponse CalendarDay
+
+func (response RemoveCalendarDay200JSONResponse) VisitRemoveCalendarDayResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveCalendarDay400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response RemoveCalendarDay400JSONResponse) VisitRemoveCalendarDayResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveCalendarDay401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response RemoveCalendarDay401JSONResponse) VisitRemoveCalendarDayResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveCalendarDay403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response RemoveCalendarDay403JSONResponse) VisitRemoveCalendarDayResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveCalendarDay404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response RemoveCalendarDay404JSONResponse) VisitRemoveCalendarDayResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveCalendarDay409JSONResponse struct{ ConflictJSONResponse }
+
+func (response RemoveCalendarDay409JSONResponse) VisitRemoveCalendarDayResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveCalendarDay500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response RemoveCalendarDay500JSONResponse) VisitRemoveCalendarDayResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetWeeklyOffRequestObject struct {
+	Body *SetWeeklyOffJSONRequestBody
+}
+
+type SetWeeklyOffResponseObject interface {
+	VisitSetWeeklyOffResponse(w http.ResponseWriter) error
+}
+
+type SetWeeklyOff200JSONResponse Calendar
+
+func (response SetWeeklyOff200JSONResponse) VisitSetWeeklyOffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetWeeklyOff400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response SetWeeklyOff400JSONResponse) VisitSetWeeklyOffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetWeeklyOff401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response SetWeeklyOff401JSONResponse) VisitSetWeeklyOffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetWeeklyOff403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response SetWeeklyOff403JSONResponse) VisitSetWeeklyOffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetWeeklyOff500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response SetWeeklyOff500JSONResponse) VisitSetWeeklyOffResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -7422,6 +9843,99 @@ func (response GetStudent500JSONResponse) VisitGetStudentResponse(w http.Respons
 	return err
 }
 
+type GetStudentAttendanceRequestObject struct {
+	StudentId openapi_types.UUID `json:"studentId"`
+	Params    GetStudentAttendanceParams
+}
+
+type GetStudentAttendanceResponseObject interface {
+	VisitGetStudentAttendanceResponse(w http.ResponseWriter) error
+}
+
+type GetStudentAttendance200JSONResponse StudentAttendance
+
+func (response GetStudentAttendance200JSONResponse) VisitGetStudentAttendanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetStudentAttendance400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response GetStudentAttendance400JSONResponse) VisitGetStudentAttendanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetStudentAttendance401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response GetStudentAttendance401JSONResponse) VisitGetStudentAttendanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetStudentAttendance403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetStudentAttendance403JSONResponse) VisitGetStudentAttendanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetStudentAttendance404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetStudentAttendance404JSONResponse) VisitGetStudentAttendanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetStudentAttendance500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GetStudentAttendance500JSONResponse) VisitGetStudentAttendanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ChangeStudentSectionRequestObject struct {
 	StudentId openapi_types.UUID `json:"studentId"`
 	Body      *ChangeStudentSectionJSONRequestBody
@@ -7978,12 +10492,60 @@ type StrictServerInterface interface {
 	// ListLedgerAccounts List the school's ledger accounts
 	// (GET /api/v1/accounts)
 	ListLedgerAccounts(ctx context.Context, request ListLedgerAccountsRequestObject) (ListLedgerAccountsResponseObject, error)
+	// ListAbsentToday Students marked absent on a date, with a contact to call
+	// (GET /api/v1/attendance/absent)
+	ListAbsentToday(ctx context.Context, request ListAbsentTodayRequestObject) (ListAbsentTodayResponseObject, error)
+	// ListLowAttendance Students whose attendance is below a threshold over a period
+	// (GET /api/v1/attendance/low)
+	ListLowAttendance(ctx context.Context, request ListLowAttendanceRequestObject) (ListLowAttendanceResponseObject, error)
+	// ListMissingRegisters Sections with no submitted register once the due time has passed
+	// (GET /api/v1/attendance/missing-registers)
+	ListMissingRegisters(ctx context.Context, request ListMissingRegistersRequestObject) (ListMissingRegistersResponseObject, error)
+	// ListRegisters The registers opened for a date, without their records
+	// (GET /api/v1/attendance/registers)
+	ListRegisters(ctx context.Context, request ListRegistersRequestObject) (ListRegistersResponseObject, error)
+	// OpenRegister Open the register of a section for a date (or return it if it is already open)
+	// (POST /api/v1/attendance/registers)
+	OpenRegister(ctx context.Context, request OpenRegisterRequestObject) (OpenRegisterResponseObject, error)
+	// GetRegister One register with every student's current status
+	// (GET /api/v1/attendance/registers/{registerId})
+	GetRegister(ctx context.Context, request GetRegisterRequestObject) (GetRegisterResponseObject, error)
+	// CorrectRecord Correct one student's status in a submitted register
+	// (POST /api/v1/attendance/registers/{registerId}/corrections)
+	CorrectRecord(ctx context.Context, request CorrectRecordRequestObject) (CorrectRecordResponseObject, error)
+	// MarkRecords Change students' statuses in an open register
+	// (PUT /api/v1/attendance/registers/{registerId}/records)
+	MarkRecords(ctx context.Context, request MarkRecordsRequestObject) (MarkRecordsResponseObject, error)
+	// SubmitRegister Submit the register
+	// (POST /api/v1/attendance/registers/{registerId}/submit)
+	SubmitRegister(ctx context.Context, request SubmitRegisterRequestObject) (SubmitRegisterResponseObject, error)
+	// GetAttendanceSettings The school's attendance settings
+	// (GET /api/v1/attendance/settings)
+	GetAttendanceSettings(ctx context.Context, request GetAttendanceSettingsRequestObject) (GetAttendanceSettingsResponseObject, error)
+	// SetAttendanceSettings Change the attendance settings
+	// (PUT /api/v1/attendance/settings)
+	SetAttendanceSettings(ctx context.Context, request SetAttendanceSettingsRequestObject) (SetAttendanceSettingsResponseObject, error)
+	// GetAttendanceSummary One day's attendance, section by section
+	// (GET /api/v1/attendance/summary)
+	GetAttendanceSummary(ctx context.Context, request GetAttendanceSummaryRequestObject) (GetAttendanceSummaryResponseObject, error)
 	// RequestOtp Send a one-time code to a mobile number
 	// (POST /api/v1/auth/otp/request)
 	RequestOtp(ctx context.Context, request RequestOtpRequestObject) (RequestOtpResponseObject, error)
 	// VerifyOtp Exchange a one-time code for a session token in one tenant
 	// (POST /api/v1/auth/otp/verify)
 	VerifyOtp(ctx context.Context, request VerifyOtpRequestObject) (VerifyOtpResponseObject, error)
+	// GetCalendar The school calendar: weekly off days and the listed days in a date range
+	// (GET /api/v1/calendar)
+	GetCalendar(ctx context.Context, request GetCalendarRequestObject) (GetCalendarResponseObject, error)
+	// AddCalendarDays Add a holiday or a special working day, for one date or a range
+	// (POST /api/v1/calendar/days)
+	AddCalendarDays(ctx context.Context, request AddCalendarDaysRequestObject) (AddCalendarDaysResponseObject, error)
+	// RemoveCalendarDay Remove a holiday or working day from the calendar
+	// (POST /api/v1/calendar/days/{dayId}/remove)
+	RemoveCalendarDay(ctx context.Context, request RemoveCalendarDayRequestObject) (RemoveCalendarDayResponseObject, error)
+	// SetWeeklyOff Set the weekly off days
+	// (PUT /api/v1/calendar/weekly-off)
+	SetWeeklyOff(ctx context.Context, request SetWeeklyOffRequestObject) (SetWeeklyOffResponseObject, error)
 	// ListChallans List challans (cursor paginated, newest first)
 	// (GET /api/v1/challans)
 	ListChallans(ctx context.Context, request ListChallansRequestObject) (ListChallansResponseObject, error)
@@ -8107,6 +10669,9 @@ type StrictServerInterface interface {
 	// GetStudent Read one student with guardians
 	// (GET /api/v1/students/{studentId})
 	GetStudent(ctx context.Context, request GetStudentRequestObject) (GetStudentResponseObject, error)
+	// GetStudentAttendance One student's attendance over a period
+	// (GET /api/v1/students/{studentId}/attendance)
+	GetStudentAttendance(ctx context.Context, request GetStudentAttendanceRequestObject) (GetStudentAttendanceResponseObject, error)
 	// ChangeStudentSection Move a student to another section, keeping history
 	// (POST /api/v1/students/{studentId}/change-section)
 	ChangeStudentSection(ctx context.Context, request ChangeStudentSectionRequestObject) (ChangeStudentSectionResponseObject, error)
@@ -8193,6 +10758,340 @@ func (sh *strictHandler) ListLedgerAccounts(w http.ResponseWriter, r *http.Reque
 	}
 }
 
+// ListAbsentToday operation middleware
+func (sh *strictHandler) ListAbsentToday(w http.ResponseWriter, r *http.Request, params ListAbsentTodayParams) {
+	var request ListAbsentTodayRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListAbsentToday(ctx, request.(ListAbsentTodayRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListAbsentToday")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListAbsentTodayResponseObject); ok {
+		if err := validResponse.VisitListAbsentTodayResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListLowAttendance operation middleware
+func (sh *strictHandler) ListLowAttendance(w http.ResponseWriter, r *http.Request, params ListLowAttendanceParams) {
+	var request ListLowAttendanceRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListLowAttendance(ctx, request.(ListLowAttendanceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListLowAttendance")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListLowAttendanceResponseObject); ok {
+		if err := validResponse.VisitListLowAttendanceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListMissingRegisters operation middleware
+func (sh *strictHandler) ListMissingRegisters(w http.ResponseWriter, r *http.Request, params ListMissingRegistersParams) {
+	var request ListMissingRegistersRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListMissingRegisters(ctx, request.(ListMissingRegistersRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListMissingRegisters")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListMissingRegistersResponseObject); ok {
+		if err := validResponse.VisitListMissingRegistersResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListRegisters operation middleware
+func (sh *strictHandler) ListRegisters(w http.ResponseWriter, r *http.Request, params ListRegistersParams) {
+	var request ListRegistersRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListRegisters(ctx, request.(ListRegistersRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListRegisters")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListRegistersResponseObject); ok {
+		if err := validResponse.VisitListRegistersResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// OpenRegister operation middleware
+func (sh *strictHandler) OpenRegister(w http.ResponseWriter, r *http.Request) {
+	var request OpenRegisterRequestObject
+
+	var body OpenRegisterJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.OpenRegister(ctx, request.(OpenRegisterRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "OpenRegister")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(OpenRegisterResponseObject); ok {
+		if err := validResponse.VisitOpenRegisterResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetRegister operation middleware
+func (sh *strictHandler) GetRegister(w http.ResponseWriter, r *http.Request, registerId openapi_types.UUID) {
+	var request GetRegisterRequestObject
+
+	request.RegisterId = registerId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetRegister(ctx, request.(GetRegisterRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetRegister")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetRegisterResponseObject); ok {
+		if err := validResponse.VisitGetRegisterResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CorrectRecord operation middleware
+func (sh *strictHandler) CorrectRecord(w http.ResponseWriter, r *http.Request, registerId openapi_types.UUID) {
+	var request CorrectRecordRequestObject
+
+	request.RegisterId = registerId
+
+	var body CorrectRecordJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CorrectRecord(ctx, request.(CorrectRecordRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CorrectRecord")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CorrectRecordResponseObject); ok {
+		if err := validResponse.VisitCorrectRecordResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// MarkRecords operation middleware
+func (sh *strictHandler) MarkRecords(w http.ResponseWriter, r *http.Request, registerId openapi_types.UUID) {
+	var request MarkRecordsRequestObject
+
+	request.RegisterId = registerId
+
+	var body MarkRecordsJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.MarkRecords(ctx, request.(MarkRecordsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "MarkRecords")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(MarkRecordsResponseObject); ok {
+		if err := validResponse.VisitMarkRecordsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SubmitRegister operation middleware
+func (sh *strictHandler) SubmitRegister(w http.ResponseWriter, r *http.Request, registerId openapi_types.UUID) {
+	var request SubmitRegisterRequestObject
+
+	request.RegisterId = registerId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SubmitRegister(ctx, request.(SubmitRegisterRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SubmitRegister")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SubmitRegisterResponseObject); ok {
+		if err := validResponse.VisitSubmitRegisterResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetAttendanceSettings operation middleware
+func (sh *strictHandler) GetAttendanceSettings(w http.ResponseWriter, r *http.Request) {
+	var request GetAttendanceSettingsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetAttendanceSettings(ctx, request.(GetAttendanceSettingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetAttendanceSettings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetAttendanceSettingsResponseObject); ok {
+		if err := validResponse.VisitGetAttendanceSettingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SetAttendanceSettings operation middleware
+func (sh *strictHandler) SetAttendanceSettings(w http.ResponseWriter, r *http.Request) {
+	var request SetAttendanceSettingsRequestObject
+
+	var body SetAttendanceSettingsJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetAttendanceSettings(ctx, request.(SetAttendanceSettingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetAttendanceSettings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetAttendanceSettingsResponseObject); ok {
+		if err := validResponse.VisitSetAttendanceSettingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetAttendanceSummary operation middleware
+func (sh *strictHandler) GetAttendanceSummary(w http.ResponseWriter, r *http.Request, params GetAttendanceSummaryParams) {
+	var request GetAttendanceSummaryRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetAttendanceSummary(ctx, request.(GetAttendanceSummaryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetAttendanceSummary")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetAttendanceSummaryResponseObject); ok {
+		if err := validResponse.VisitGetAttendanceSummaryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // RequestOtp operation middleware
 func (sh *strictHandler) RequestOtp(w http.ResponseWriter, r *http.Request) {
 	var request RequestOtpRequestObject
@@ -8248,6 +11147,120 @@ func (sh *strictHandler) VerifyOtp(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(VerifyOtpResponseObject); ok {
 		if err := validResponse.VisitVerifyOtpResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetCalendar operation middleware
+func (sh *strictHandler) GetCalendar(w http.ResponseWriter, r *http.Request, params GetCalendarParams) {
+	var request GetCalendarRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetCalendar(ctx, request.(GetCalendarRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetCalendar")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetCalendarResponseObject); ok {
+		if err := validResponse.VisitGetCalendarResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AddCalendarDays operation middleware
+func (sh *strictHandler) AddCalendarDays(w http.ResponseWriter, r *http.Request) {
+	var request AddCalendarDaysRequestObject
+
+	var body AddCalendarDaysJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AddCalendarDays(ctx, request.(AddCalendarDaysRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AddCalendarDays")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AddCalendarDaysResponseObject); ok {
+		if err := validResponse.VisitAddCalendarDaysResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RemoveCalendarDay operation middleware
+func (sh *strictHandler) RemoveCalendarDay(w http.ResponseWriter, r *http.Request, dayId openapi_types.UUID) {
+	var request RemoveCalendarDayRequestObject
+
+	request.DayId = dayId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RemoveCalendarDay(ctx, request.(RemoveCalendarDayRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RemoveCalendarDay")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RemoveCalendarDayResponseObject); ok {
+		if err := validResponse.VisitRemoveCalendarDayResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SetWeeklyOff operation middleware
+func (sh *strictHandler) SetWeeklyOff(w http.ResponseWriter, r *http.Request) {
+	var request SetWeeklyOffRequestObject
+
+	var body SetWeeklyOffJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetWeeklyOff(ctx, request.(SetWeeklyOffRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetWeeklyOff")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetWeeklyOffResponseObject); ok {
+		if err := validResponse.VisitSetWeeklyOffResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -9401,6 +12414,33 @@ func (sh *strictHandler) GetStudent(w http.ResponseWriter, r *http.Request, stud
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetStudentResponseObject); ok {
 		if err := validResponse.VisitGetStudentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetStudentAttendance operation middleware
+func (sh *strictHandler) GetStudentAttendance(w http.ResponseWriter, r *http.Request, studentId openapi_types.UUID, params GetStudentAttendanceParams) {
+	var request GetStudentAttendanceRequestObject
+
+	request.StudentId = studentId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetStudentAttendance(ctx, request.(GetStudentAttendanceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetStudentAttendance")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetStudentAttendanceResponseObject); ok {
+		if err := validResponse.VisitGetStudentAttendanceResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

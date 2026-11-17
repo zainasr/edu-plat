@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Education Platform API
-  version: 0.10.0
+  version: 0.11.0
   description: Source of truth for every capability (DEC-004). Edit this first, then the code.
 # Infrastructure endpoints (health) sit at the root for the load balancer.
 # Product endpoints carry their version in the path, for example /api/v1/students.
@@ -18,6 +18,8 @@ tags:
   - name: fees
   - name: staff
   - name: payments
+  - name: calendar
+  - name: attendance
 
 security:
   - bearerAuth: []
@@ -1326,6 +1328,448 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "500": { $ref: "#/components/responses/InternalError" }
 
+  /api/v1/calendar:
+    get:
+      operationId: getCalendar
+      tags: [calendar]
+      summary: "The school calendar: weekly off days and the listed days in a date range"
+      description: |
+        Requires `org.view`. A day is a school day unless it is a weekly off day or a listed holiday; a listed
+        `working` day makes a weekly off day a school day (REQ-ORG-011). Holidays suppress attendance.
+      parameters:
+        - name: from
+          in: query
+          required: false
+          description: Defaults to the first day of the current month (Asia/Karachi).
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          required: false
+          description: Defaults to the last day of the month of `from`. At most 366 days.
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: The calendar
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Calendar" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/calendar/weekly-off:
+    put:
+      operationId: setWeeklyOff
+      tags: [calendar]
+      summary: Set the weekly off days
+      description: Requires `calendar.manage`. Days are numbered 0 (Sunday) to 6 (Saturday). Defaults to Sunday.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WeeklyOffSet" }
+      responses:
+        "200":
+          description: The calendar
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Calendar" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/calendar/days:
+    post:
+      operationId: addCalendarDays
+      tags: [calendar]
+      summary: Add a holiday or a special working day, for one date or a range
+      description: |
+        Requires `calendar.manage`. One row is kept per date, up to 60 dates at once. A date that already has an
+        active entry is a 409 `calendar.day_exists`: remove the old entry first. Registers already opened on a
+        date are kept as they are.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CalendarDaysCreate" }
+      responses:
+        "201":
+          description: The days added
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CalendarDayList" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/calendar/days/{dayId}/remove:
+    post:
+      operationId: removeCalendarDay
+      tags: [calendar]
+      summary: Remove a holiday or working day from the calendar
+      description: Requires `calendar.manage`. The entry is kept as history (never deleted) and stops counting.
+      parameters:
+        - name: dayId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: The removed entry
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CalendarDay" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/attendance/settings:
+    get:
+      operationId: getAttendanceSettings
+      tags: [attendance]
+      summary: The school's attendance settings
+      description: Requires `attendance.view`. Created with defaults on first use.
+      responses:
+        "200":
+          description: The settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AttendanceSettings" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    put:
+      operationId: setAttendanceSettings
+      tags: [attendance]
+      summary: Change the attendance settings
+      description: Requires `attendance.settings`. Audited.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AttendanceSettings" }
+      responses:
+        "200":
+          description: The settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AttendanceSettings" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/attendance/registers:
+    post:
+      operationId: openRegister
+      tags: [attendance]
+      summary: Open the register of a section for a date (or return it if it is already open)
+      description: |
+        Requires `attendance.mark`. The register opens with every student enrolled in the section on that date
+        marked present, so only the exceptions need changing (REQ-ATT-015). Safe to call twice. Refused on a
+        holiday or weekly off day (`attendance.not_school_day`), for a future date, and for a date older than the
+        correction window unless the caller has `attendance.edit_any`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RegisterOpen" }
+      responses:
+        "200":
+          description: The register
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Register" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    get:
+      operationId: listRegisters
+      tags: [attendance]
+      summary: The registers opened for a date, without their records
+      description: Requires `attendance.view`.
+      parameters:
+        - name: date
+          in: query
+          required: false
+          description: Required; a missing value is a 400 `attendance.date_invalid` (checked after the permission).
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: The registers
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegisterList" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/attendance/registers/{registerId}:
+    get:
+      operationId: getRegister
+      tags: [attendance]
+      summary: One register with every student's current status
+      description: Requires `attendance.view`.
+      parameters:
+        - name: registerId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: The register
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Register" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/attendance/registers/{registerId}/records:
+    put:
+      operationId: markRecords
+      tags: [attendance]
+      summary: Change students' statuses in an open register
+      description: |
+        Requires `attendance.mark`. Only while the register is open (a submitted register changes only by a
+        correction with a reason), only on a school day, and, for a register older than the correction window,
+        only with `attendance.edit_any`. A mark that equals the current status changes nothing. Every change keeps the
+        old value as history (BR-ATT-002).
+      parameters:
+        - name: registerId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RecordsMark" }
+      responses:
+        "200":
+          description: The register
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Register" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/attendance/registers/{registerId}/submit:
+    post:
+      operationId: submitRegister
+      tags: [attendance]
+      summary: Submit the register
+      description: |
+        Requires `attendance.mark`. Once. On submit, students who joined the section that day and were not marked
+        are recorded present, and students who are no longer enrolled in it (moved or withdrew) are recorded as
+        `left` and not counted. Only submitted registers feed the absent list, the reports and the parent
+        alerts; a register that is never submitted is never treated as all-absent (BR-ATT-005).
+      parameters:
+        - name: registerId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: The submitted register
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Register" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/attendance/registers/{registerId}/corrections:
+    post:
+      operationId: correctRecord
+      tags: [attendance]
+      summary: Correct one student's status in a submitted register
+      description: |
+        Requires `attendance.edit_within_window` for dates within the correction window (default 7 days), or
+        `attendance.edit_any` for older dates. A reason is required. The old value, new value, who, when and why
+        are kept (US-ATT-005). Only a submitted register is corrected; an open one is simply marked.
+      parameters:
+        - name: registerId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RecordCorrection" }
+      responses:
+        "200":
+          description: The register
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Register" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/attendance/missing-registers:
+    get:
+      operationId: listMissingRegisters
+      tags: [attendance]
+      summary: Sections with no submitted register once the due time has passed
+      description: |
+        Requires `attendance.view`. For today, empty until the school's register due time (default 10:00); for
+        a past school day, every section without a submitted register (US-ATT-008). Holidays have none.
+      parameters:
+        - name: date
+          in: query
+          required: false
+          description: Required; a missing value is a 400 `attendance.date_invalid` (checked after the permission).
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: The missing registers
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MissingRegisters" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/attendance/summary:
+    get:
+      operationId: getAttendanceSummary
+      tags: [attendance]
+      summary: One day's attendance, section by section
+      description: Requires `attendance.view`. Counts come from submitted registers only.
+      parameters:
+        - name: date
+          in: query
+          required: false
+          description: Required; a missing value is a 400 `attendance.date_invalid` (checked after the permission).
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: The summary
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DailySummary" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/attendance/absent:
+    get:
+      operationId: listAbsentToday
+      tags: [attendance]
+      summary: Students marked absent on a date, with a contact to call
+      description: Requires `attendance.view`. Submitted registers only (BR-ATT-005). The guardian's name and mobile are included only for callers with `attendance.contacts`.
+      parameters:
+        - name: date
+          in: query
+          required: false
+          description: Required; a missing value is a 400 `attendance.date_invalid` (checked after the permission).
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: The absent students
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AbsentList" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/attendance/low:
+    get:
+      operationId: listLowAttendance
+      tags: [attendance]
+      summary: Students whose attendance is below a threshold over a period
+      description: |
+        Requires `attendance.view`. Attendance is (present + late) / (present + late + absent) over submitted
+        registers; approved leave is excused and reported separately, not counted against the student.
+        The threshold defaults to the school's setting (75%).
+      parameters:
+        - name: from
+          in: query
+          required: false
+          description: Required; a missing value is a 400 `attendance.date_invalid` (checked after the permission).
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          required: false
+          description: Required; a missing value is a 400 `attendance.date_invalid` (checked after the permission).
+          schema: { type: string, format: date }
+        - name: threshold
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100 }
+      responses:
+        "200":
+          description: The students below the threshold
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LowAttendanceList" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/students/{studentId}/attendance:
+    get:
+      operationId: getStudentAttendance
+      tags: [attendance]
+      summary: One student's attendance over a period
+      description: Requires `attendance.view`. Days come from submitted registers; `corrected` marks days that were changed after submission.
+      parameters:
+        - name: studentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: from
+          in: query
+          required: false
+          description: Required; a missing value is a 400 `attendance.date_invalid` (checked after the permission).
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          required: false
+          description: Required; a missing value is a 400 `attendance.date_invalid` (checked after the permission).
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: The student's attendance
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StudentAttendance" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
 components:
   parameters:
     IdempotencyKey:
@@ -2102,7 +2546,7 @@ components:
 
     RoleName:
       type: string
-      enum: [owner, accountant, receptionist]
+      enum: [owner, accountant, receptionist, attendance_clerk]
 
     StaffStatus:
       type: string
@@ -2345,3 +2789,304 @@ components:
           type: array
           items: { $ref: "#/components/schemas/Defaulter" }
         next_cursor: { type: string, nullable: true }
+
+    AttendanceStatus:
+      type: string
+      description: |
+        `left` appears only on a submitted register, for a student who moved to another section or withdrew
+        that day; they are not counted anywhere.
+      enum: [present, absent, late, leave, left]
+
+    MarkStatus:
+      type: string
+      description: The statuses a person can set.
+      enum: [present, absent, late, leave]
+
+    RegisterStatus:
+      type: string
+      enum: [open, submitted]
+
+    CalendarKind:
+      type: string
+      enum: [holiday, working]
+
+    CalendarDay:
+      type: object
+      required: [id, date, kind, name, status]
+      properties:
+        id: { type: string, format: uuid }
+        date: { type: string, format: date }
+        kind: { $ref: "#/components/schemas/CalendarKind" }
+        name: { type: string }
+        status: { type: string, enum: [active, removed] }
+
+    CalendarDayList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/CalendarDay" }
+
+    Calendar:
+      type: object
+      required: [weekly_off_days, from, to, days]
+      properties:
+        weekly_off_days:
+          type: array
+          items: { type: integer, minimum: 0, maximum: 6 }
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        days:
+          type: array
+          description: The active entries in the range.
+          items: { $ref: "#/components/schemas/CalendarDay" }
+
+    WeeklyOffSet:
+      type: object
+      required: [days]
+      properties:
+        days:
+          type: array
+          maxItems: 6
+          items: { type: integer, minimum: 0, maximum: 6 }
+
+    CalendarDaysCreate:
+      type: object
+      required: [from, kind, name]
+      properties:
+        from: { type: string, format: date }
+        to: { type: string, format: date, description: Last date (inclusive); omit for one day. At most 60 dates. }
+        kind: { $ref: "#/components/schemas/CalendarKind" }
+        name: { type: string, minLength: 1, maxLength: 80 }
+
+    AttendanceSettings:
+      type: object
+      required: [register_due_time, edit_window_days, low_attendance_percent]
+      properties:
+        register_due_time:
+          type: string
+          example: "10:00"
+          description: HH:MM in Asia/Karachi. A register not submitted by then is reported missing.
+        edit_window_days:
+          type: integer
+          minimum: 1
+          maximum: 90
+          description: How many days back `attendance.edit_within_window` may correct a submitted register.
+        low_attendance_percent:
+          type: integer
+          minimum: 1
+          maximum: 100
+
+    RegisterOpen:
+      type: object
+      required: [section_id, date]
+      properties:
+        section_id: { type: string, format: uuid }
+        date: { type: string, format: date }
+
+    AttendanceRecord:
+      type: object
+      required: [student_id, registration_no, full_name, status, method, version, corrected]
+      properties:
+        student_id: { type: string, format: uuid }
+        registration_no: { type: string }
+        full_name: { type: string }
+        status: { $ref: "#/components/schemas/AttendanceStatus" }
+        method: { type: string, enum: [prefill, manual, correction] }
+        version: { type: integer, description: 1 for the first entry; each change adds one. }
+        corrected: { type: boolean, description: True when changed after the register was submitted. }
+
+    RegisterCounts:
+      type: object
+      required: [students, present, absent, late, leave]
+      properties:
+        students: { type: integer, description: Students on the register who are counted (not those who left). Leave is included here. }
+        present: { type: integer }
+        absent: { type: integer }
+        late: { type: integer }
+        leave: { type: integer }
+
+    Register:
+      type: object
+      required: [id, section_id, date, status, counts, records]
+      properties:
+        id: { type: string, format: uuid }
+        section_id: { type: string, format: uuid }
+        section_name: { type: string }
+        date: { type: string, format: date }
+        status: { $ref: "#/components/schemas/RegisterStatus" }
+        submitted_at: { type: string, format: date-time, nullable: true }
+        counts: { $ref: "#/components/schemas/RegisterCounts" }
+        records:
+          type: array
+          items: { $ref: "#/components/schemas/AttendanceRecord" }
+
+    RegisterBrief:
+      type: object
+      required: [id, section_id, section_name, date, status, counts]
+      properties:
+        id: { type: string, format: uuid }
+        section_id: { type: string, format: uuid }
+        section_name: { type: string }
+        date: { type: string, format: date }
+        status: { $ref: "#/components/schemas/RegisterStatus" }
+        submitted_at: { type: string, format: date-time, nullable: true }
+        counts: { $ref: "#/components/schemas/RegisterCounts" }
+
+    RegisterList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/RegisterBrief" }
+
+    RecordMark:
+      type: object
+      required: [student_id, status]
+      properties:
+        student_id: { type: string, format: uuid }
+        status: { $ref: "#/components/schemas/MarkStatus" }
+
+    RecordsMark:
+      type: object
+      required: [marks]
+      properties:
+        marks:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items: { $ref: "#/components/schemas/RecordMark" }
+
+    RecordCorrection:
+      type: object
+      required: [student_id, status, reason]
+      properties:
+        student_id: { type: string, format: uuid }
+        status: { $ref: "#/components/schemas/MarkStatus" }
+        reason: { type: string, minLength: 3, maxLength: 200 }
+
+    MissingRegister:
+      type: object
+      required: [section_id, section_name]
+      properties:
+        section_id: { type: string, format: uuid }
+        section_name: { type: string }
+        has_open_register: { type: boolean, description: A register was opened but never submitted. }
+
+    MissingRegisters:
+      type: object
+      required: [date, school_day, due_time, overdue, items]
+      properties:
+        date: { type: string, format: date }
+        school_day: { type: boolean }
+        due_time: { type: string }
+        overdue: { type: boolean }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/MissingRegister" }
+
+    SectionDay:
+      type: object
+      required: [section_id, section_name, submitted, counts]
+      properties:
+        section_id: { type: string, format: uuid }
+        section_name: { type: string }
+        submitted: { type: boolean }
+        counts: { $ref: "#/components/schemas/RegisterCounts" }
+
+    DailySummary:
+      type: object
+      required: [date, school_day, totals, sections]
+      properties:
+        date: { type: string, format: date }
+        school_day: { type: boolean }
+        totals: { $ref: "#/components/schemas/RegisterCounts" }
+        sections:
+          type: array
+          items: { $ref: "#/components/schemas/SectionDay" }
+
+    AbsentContact:
+      type: object
+      required: [name, mobile, relationship]
+      properties:
+        name: { type: string }
+        mobile: { type: string }
+        relationship: { type: string }
+
+    AbsentStudent:
+      type: object
+      required: [student_id, registration_no, full_name, section_id, section_name]
+      properties:
+        student_id: { type: string, format: uuid }
+        registration_no: { type: string }
+        full_name: { type: string }
+        section_id: { type: string, format: uuid }
+        section_name: { type: string }
+        contact:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/AbsentContact"
+
+    AbsentList:
+      type: object
+      required: [date, items]
+      properties:
+        date: { type: string, format: date }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AbsentStudent" }
+
+    AttendanceTotals:
+      type: object
+      required: [present, late, absent, leave, expected_days, percent]
+      properties:
+        present: { type: integer }
+        late: { type: integer }
+        absent: { type: integer }
+        leave: { type: integer }
+        expected_days: { type: integer, description: present + late + absent; leave is excused. }
+        percent: { type: number, description: "(present + late) / expected_days, as a percentage with one decimal; 100 when there are no expected days." }
+
+    LowAttendanceItem:
+      type: object
+      required: [student_id, registration_no, full_name, totals]
+      properties:
+        student_id: { type: string, format: uuid }
+        registration_no: { type: string }
+        full_name: { type: string }
+        totals: { $ref: "#/components/schemas/AttendanceTotals" }
+
+    LowAttendanceList:
+      type: object
+      required: [from, to, threshold, items]
+      properties:
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        threshold: { type: integer }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/LowAttendanceItem" }
+
+    StudentDay:
+      type: object
+      required: [date, section_id, status, method, corrected]
+      properties:
+        date: { type: string, format: date }
+        section_id: { type: string, format: uuid }
+        status: { $ref: "#/components/schemas/AttendanceStatus" }
+        method: { type: string }
+        corrected: { type: boolean }
+
+    StudentAttendance:
+      type: object
+      required: [student_id, from, to, totals, days]
+      properties:
+        student_id: { type: string, format: uuid }
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        totals: { $ref: "#/components/schemas/AttendanceTotals" }
+        days:
+          type: array
+          items: { $ref: "#/components/schemas/StudentDay" }

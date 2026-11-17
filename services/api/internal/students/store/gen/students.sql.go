@@ -651,3 +651,131 @@ func (q *Queries) NextCounter(ctx context.Context, arg NextCounterParams) (int64
 	err := row.Scan(&value)
 	return value, err
 }
+
+const primaryContacts = `-- name: PrimaryContacts :many
+SELECT DISTINCT ON (l.student_id) l.student_id, g.full_name, g.mobile, l.relationship
+FROM guardian_links l
+JOIN guardians g ON g.tenant_id = l.tenant_id AND g.id = l.guardian_id
+WHERE l.tenant_id = $1 AND l.student_id = ANY($2::uuid[])
+ORDER BY l.student_id, l.is_primary DESC, l.is_fee_payer DESC, g.full_name
+`
+
+type PrimaryContactsParams struct {
+	TenantID   pgtype.UUID
+	StudentIds []pgtype.UUID
+}
+
+type PrimaryContactsRow struct {
+	StudentID    pgtype.UUID
+	FullName     string
+	Mobile       string
+	Relationship string
+}
+
+// One guardian per student to call: the primary guardian, else the fee payer.
+func (q *Queries) PrimaryContacts(ctx context.Context, arg PrimaryContactsParams) ([]PrimaryContactsRow, error) {
+	rows, err := q.db.Query(ctx, primaryContacts, arg.TenantID, arg.StudentIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PrimaryContactsRow
+	for rows.Next() {
+		var i PrimaryContactsRow
+		if err := rows.Scan(
+			&i.StudentID,
+			&i.FullName,
+			&i.Mobile,
+			&i.Relationship,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const sectionRoster = `-- name: SectionRoster :many
+SELECT s.id, s.registration_no, s.full_name
+FROM enrolments e
+JOIN students s ON s.tenant_id = e.tenant_id AND s.id = e.student_id
+WHERE e.tenant_id = $1 AND e.section_id = $2
+  AND e.started_on <= $3::date AND (e.ended_on IS NULL OR e.ended_on > $3::date)
+ORDER BY s.registration_no, s.id
+`
+
+type SectionRosterParams struct {
+	TenantID  pgtype.UUID
+	SectionID pgtype.UUID
+	OnDay     pgtype.Date
+}
+
+type SectionRosterRow struct {
+	ID             pgtype.UUID
+	RegistrationNo string
+	FullName       string
+}
+
+// Students enrolled in a section on a date: the enrolment began on or before it and had not ended by it.
+// ended_on is the first day NOT enrolled: a move or withdrawal on a day puts the student in the new section
+// (or out) for that whole day. Enrolment dates decide, so a student who withdrew yesterday still has a
+// roster for the days before.
+func (q *Queries) SectionRoster(ctx context.Context, arg SectionRosterParams) ([]SectionRosterRow, error) {
+	rows, err := q.db.Query(ctx, sectionRoster, arg.TenantID, arg.SectionID, arg.OnDay)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SectionRosterRow
+	for rows.Next() {
+		var i SectionRosterRow
+		if err := rows.Scan(&i.ID, &i.RegistrationNo, &i.FullName); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const studentBriefs = `-- name: StudentBriefs :many
+SELECT id, registration_no, full_name
+FROM students
+WHERE tenant_id = $1 AND id = ANY($2::uuid[])
+`
+
+type StudentBriefsParams struct {
+	TenantID pgtype.UUID
+	Ids      []pgtype.UUID
+}
+
+type StudentBriefsRow struct {
+	ID             pgtype.UUID
+	RegistrationNo string
+	FullName       string
+}
+
+func (q *Queries) StudentBriefs(ctx context.Context, arg StudentBriefsParams) ([]StudentBriefsRow, error) {
+	rows, err := q.db.Query(ctx, studentBriefs, arg.TenantID, arg.Ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []StudentBriefsRow
+	for rows.Next() {
+		var i StudentBriefsRow
+		if err := rows.Scan(&i.ID, &i.RegistrationNo, &i.FullName); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

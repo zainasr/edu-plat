@@ -11,6 +11,38 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const activeCalendarDay = `-- name: ActiveCalendarDay :one
+SELECT id, day, kind, name, status
+FROM calendar_days
+WHERE tenant_id = $1 AND status = 'active' AND day = $2::date
+`
+
+type ActiveCalendarDayParams struct {
+	TenantID pgtype.UUID
+	Day      pgtype.Date
+}
+
+type ActiveCalendarDayRow struct {
+	ID     pgtype.UUID
+	Day    pgtype.Date
+	Kind   string
+	Name   string
+	Status string
+}
+
+func (q *Queries) ActiveCalendarDay(ctx context.Context, arg ActiveCalendarDayParams) (ActiveCalendarDayRow, error) {
+	row := q.db.QueryRow(ctx, activeCalendarDay, arg.TenantID, arg.Day)
+	var i ActiveCalendarDayRow
+	err := row.Scan(
+		&i.ID,
+		&i.Day,
+		&i.Kind,
+		&i.Name,
+		&i.Status,
+	)
+	return i, err
+}
+
 const archiveClass = `-- name: ArchiveClass :one
 UPDATE classes
 SET status = 'archived'
@@ -136,6 +168,53 @@ func (q *Queries) EnsureDefaultBranch(ctx context.Context, tenantID pgtype.UUID)
 	return err
 }
 
+const getCalendarDay = `-- name: GetCalendarDay :one
+SELECT id, day, kind, name, status
+FROM calendar_days
+WHERE tenant_id = $1 AND id = $2
+`
+
+type GetCalendarDayParams struct {
+	TenantID pgtype.UUID
+	ID       pgtype.UUID
+}
+
+type GetCalendarDayRow struct {
+	ID     pgtype.UUID
+	Day    pgtype.Date
+	Kind   string
+	Name   string
+	Status string
+}
+
+func (q *Queries) GetCalendarDay(ctx context.Context, arg GetCalendarDayParams) (GetCalendarDayRow, error) {
+	row := q.db.QueryRow(ctx, getCalendarDay, arg.TenantID, arg.ID)
+	var i GetCalendarDayRow
+	err := row.Scan(
+		&i.ID,
+		&i.Day,
+		&i.Kind,
+		&i.Name,
+		&i.Status,
+	)
+	return i, err
+}
+
+const getCalendarSettings = `-- name: GetCalendarSettings :one
+
+SELECT weekly_off_days
+FROM calendar_settings
+WHERE tenant_id = $1
+`
+
+// ---- calendar (slice 6a) --------------------------------------------------------------
+func (q *Queries) GetCalendarSettings(ctx context.Context, tenantID pgtype.UUID) ([]int16, error) {
+	row := q.db.QueryRow(ctx, getCalendarSettings, tenantID)
+	var weekly_off_days []int16
+	err := row.Scan(&weekly_off_days)
+	return weekly_off_days, err
+}
+
 const getClass = `-- name: GetClass :one
 SELECT id, name, grade_level, status
 FROM classes
@@ -162,6 +241,49 @@ func (q *Queries) GetClass(ctx context.Context, arg GetClassParams) (GetClassRow
 		&i.ID,
 		&i.Name,
 		&i.GradeLevel,
+		&i.Status,
+	)
+	return i, err
+}
+
+const insertCalendarDay = `-- name: InsertCalendarDay :one
+INSERT INTO calendar_days (tenant_id, day, kind, name, created_by)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (tenant_id, day) WHERE status = 'active' DO NOTHING
+RETURNING id, day, kind, name, status
+`
+
+type InsertCalendarDayParams struct {
+	TenantID  pgtype.UUID
+	Day       pgtype.Date
+	Kind      string
+	Name      string
+	CreatedBy pgtype.UUID
+}
+
+type InsertCalendarDayRow struct {
+	ID     pgtype.UUID
+	Day    pgtype.Date
+	Kind   string
+	Name   string
+	Status string
+}
+
+// DO NOTHING on the one-active-entry-per-date index: a date that already has one returns no row.
+func (q *Queries) InsertCalendarDay(ctx context.Context, arg InsertCalendarDayParams) (InsertCalendarDayRow, error) {
+	row := q.db.QueryRow(ctx, insertCalendarDay,
+		arg.TenantID,
+		arg.Day,
+		arg.Kind,
+		arg.Name,
+		arg.CreatedBy,
+	)
+	var i InsertCalendarDayRow
+	err := row.Scan(
+		&i.ID,
+		&i.Day,
+		&i.Kind,
+		&i.Name,
 		&i.Status,
 	)
 	return i, err
@@ -279,6 +401,99 @@ func (q *Queries) InsertSession(ctx context.Context, arg InsertSessionParams) (I
 		&i.IsCurrent,
 	)
 	return i, err
+}
+
+const listActiveSectionsAll = `-- name: ListActiveSectionsAll :many
+SELECT s.id, s.class_id, c.name AS class_name, s.name, s.shift, s.status
+FROM sections s
+JOIN classes c ON c.tenant_id = s.tenant_id AND c.id = s.class_id
+WHERE s.tenant_id = $1 AND s.status = 'active' AND c.status = 'active'
+ORDER BY c.grade_level, c.name, s.name, s.shift, s.id
+`
+
+type ListActiveSectionsAllRow struct {
+	ID        pgtype.UUID
+	ClassID   pgtype.UUID
+	ClassName string
+	Name      string
+	Shift     string
+	Status    string
+}
+
+// Every active section of an active class, for modules that must visit each one (missing registers).
+func (q *Queries) ListActiveSectionsAll(ctx context.Context, tenantID pgtype.UUID) ([]ListActiveSectionsAllRow, error) {
+	rows, err := q.db.Query(ctx, listActiveSectionsAll, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListActiveSectionsAllRow
+	for rows.Next() {
+		var i ListActiveSectionsAllRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ClassID,
+			&i.ClassName,
+			&i.Name,
+			&i.Shift,
+			&i.Status,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCalendarDays = `-- name: ListCalendarDays :many
+SELECT id, day, kind, name, status
+FROM calendar_days
+WHERE tenant_id = $1 AND status = 'active'
+  AND day BETWEEN $2::date AND $3::date
+ORDER BY day
+`
+
+type ListCalendarDaysParams struct {
+	TenantID pgtype.UUID
+	FromDay  pgtype.Date
+	ToDay    pgtype.Date
+}
+
+type ListCalendarDaysRow struct {
+	ID     pgtype.UUID
+	Day    pgtype.Date
+	Kind   string
+	Name   string
+	Status string
+}
+
+func (q *Queries) ListCalendarDays(ctx context.Context, arg ListCalendarDaysParams) ([]ListCalendarDaysRow, error) {
+	rows, err := q.db.Query(ctx, listCalendarDays, arg.TenantID, arg.FromDay, arg.ToDay)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListCalendarDaysRow
+	for rows.Next() {
+		var i ListCalendarDaysRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Day,
+			&i.Kind,
+			&i.Name,
+			&i.Status,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listClasses = `-- name: ListClasses :many
@@ -422,6 +637,40 @@ func (q *Queries) ListSessions(ctx context.Context, arg ListSessionsParams) ([]L
 	return items, nil
 }
 
+const removeCalendarDay = `-- name: RemoveCalendarDay :one
+UPDATE calendar_days
+SET status = 'removed', removed_at = now(), removed_by = $1
+WHERE tenant_id = $2 AND id = $3 AND status = 'active'
+RETURNING id, day, kind, name, status
+`
+
+type RemoveCalendarDayParams struct {
+	RemovedBy pgtype.UUID
+	TenantID  pgtype.UUID
+	ID        pgtype.UUID
+}
+
+type RemoveCalendarDayRow struct {
+	ID     pgtype.UUID
+	Day    pgtype.Date
+	Kind   string
+	Name   string
+	Status string
+}
+
+func (q *Queries) RemoveCalendarDay(ctx context.Context, arg RemoveCalendarDayParams) (RemoveCalendarDayRow, error) {
+	row := q.db.QueryRow(ctx, removeCalendarDay, arg.RemovedBy, arg.TenantID, arg.ID)
+	var i RemoveCalendarDayRow
+	err := row.Scan(
+		&i.ID,
+		&i.Day,
+		&i.Kind,
+		&i.Name,
+		&i.Status,
+	)
+	return i, err
+}
+
 const sectionsByIDs = `-- name: SectionsByIDs :many
 SELECT s.id, s.class_id, c.name AS class_name, c.status AS class_status, c.branch_id,
        s.name, s.shift, s.status
@@ -553,4 +802,23 @@ func (q *Queries) SetCurrentSession(ctx context.Context, arg SetCurrentSessionPa
 		&i.IsCurrent,
 	)
 	return i, err
+}
+
+const setWeeklyOff = `-- name: SetWeeklyOff :exec
+INSERT INTO calendar_settings (tenant_id, weekly_off_days, updated_by)
+VALUES ($1, $2::smallint[], $3)
+ON CONFLICT (tenant_id) DO UPDATE
+SET weekly_off_days = EXCLUDED.weekly_off_days, updated_at = now(), updated_by = EXCLUDED.updated_by
+`
+
+type SetWeeklyOffParams struct {
+	TenantID      pgtype.UUID
+	WeeklyOffDays []int16
+	UpdatedBy     pgtype.UUID
+}
+
+// The row is created the first time the weekly off days are saved; until then reads use Sunday.
+func (q *Queries) SetWeeklyOff(ctx context.Context, arg SetWeeklyOffParams) error {
+	_, err := q.db.Exec(ctx, setWeeklyOff, arg.TenantID, arg.WeeklyOffDays, arg.UpdatedBy)
+	return err
 }
