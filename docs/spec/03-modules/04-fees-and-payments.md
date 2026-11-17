@@ -51,7 +51,7 @@ Online:   initiated ──> succeeded | failed ──> (webhook reconciliation)
 - **REQ-FEE-021** Payment methods: cash, bank deposit/transfer (manual with reference), cheque, plus online via the aggregator (JazzCash, Easypaisa, bank/Raast QR). Every payment names the **account** it is deposited to (for example "Cash in Hand"). A **payment method** field is mandatory (the reference leaves it "not stated"). (ours)
 - **REQ-FEE-022** One family payment is allocated across children; child-level receipts plus a combined receipt are produced. The default allocation is oldest challan first, editable by the user.
 - **REQ-FEE-023** Advance: an overpayment is applied to the next challan(s) and shown as Advance; money that cannot be applied must be refunded explicitly. There is no free-floating credit balance. (DEC-010)
-- **REQ-FEE-024** Receipts are numbered `PREFIX-YEAR-NNNNNN` per institution per fiscal year, sequential, no gaps; formats A4, A5, 80 mm thermal (browser print); reprints are marked "Duplicate"; the family receipt lists sibling lines. (ref)
+- **REQ-FEE-024** Receipts are numbered `PREFIX-YEAR-NNNNNN` per institution per fiscal year (July to June, named by the year it starts, DEC-026), sequential, no gaps; formats A4, A5, 80 mm thermal (browser print); reprints are marked "Duplicate"; the family receipt lists sibling lines. (ref)
 - **REQ-FEE-025** Voiding a payment keeps the receipt number, requires a reason and approval (if maker-checker on) and produces a reversing journal entry. Voided receipts stay visible via a "Show voided" filter. (ref)
 - **REQ-FEE-026** Cash sessions: each collector opens a session, records collections, closes with a count and variance note; "day close" report (see Accounting).
 
@@ -68,7 +68,7 @@ Online:   initiated ──> succeeded | failed ──> (webhook reconciliation)
 
 ### 4.6 Security deposits
 - **REQ-FEE-050** Security deposit is a refundable fee type "held on the family's behalf". It is a **liability**, never income. A Security Deposits page lists held, adjusted and refunded amounts. Refund requires approval and posts ledger entries.
-- **REQ-FEE-051** (ours) The schedule view and the ledger MUST agree. Only **received** deposits are held as a liability; billed-but-unpaid deposits are a receivable. (The reference shows a mismatch between its schedule and ledger.)
+- **REQ-FEE-051** (ours) The schedule view and the ledger MUST agree. Deposits are booked as a liability when the challan is released (DEC-025), so the schedule and the ledger agree. (The reference shows a mismatch between its schedule and ledger.)
 
 ### 4.7 Other
 - **REQ-FEE-060** Ad hoc fees (books, uniform, events, fines, exams) as extra fee heads through an Additional Fees page. No inventory or shop in 1.0.

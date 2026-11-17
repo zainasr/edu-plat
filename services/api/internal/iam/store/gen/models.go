@@ -228,6 +228,34 @@ type OtpChallenge struct {
 	CreatedAt  pgtype.Timestamptz
 }
 
+type Payment struct {
+	ID             pgtype.UUID
+	TenantID       pgtype.UUID
+	FamilyID       pgtype.UUID
+	FiscalYear     int32
+	ReceiptNo      int64
+	Amount         int64
+	Method         string
+	AccountCode    string
+	Reference      pgtype.Text
+	ReceivedOn     pgtype.Date
+	Status         string
+	JournalEntryID pgtype.UUID
+	VoidReason     pgtype.Text
+	VoidedAt       pgtype.Timestamptz
+	VoidedBy       pgtype.UUID
+	VoidEntryID    pgtype.UUID
+	CreatedAt      pgtype.Timestamptz
+	CreatedBy      pgtype.UUID
+}
+
+type PaymentAllocation struct {
+	TenantID  pgtype.UUID
+	PaymentID pgtype.UUID
+	ChallanID pgtype.UUID
+	Amount    int64
+}
+
 type RoleAssignment struct {
 	ID           pgtype.UUID
 	TenantID     pgtype.UUID

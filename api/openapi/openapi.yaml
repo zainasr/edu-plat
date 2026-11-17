@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Education Platform API
-  version: 0.8.1
+  version: 0.9.0
   description: Source of truth for every capability (DEC-004). Edit this first, then the code.
 # Infrastructure endpoints (health) sit at the root for the load balancer.
 # Product endpoints carry their version in the path, for example /api/v1/students.
@@ -17,6 +17,7 @@ tags:
   - name: ledger
   - name: fees
   - name: staff
+  - name: payments
 
 security:
   - bearerAuth: []
@@ -1111,6 +1112,151 @@ paths:
         "409": { $ref: "#/components/responses/Conflict" }
         "500": { $ref: "#/components/responses/InternalError" }
 
+  /api/v1/payments:
+    post:
+      operationId: recordPayment
+      tags: [payments]
+      summary: Take a payment from a family at the counter
+      description: |
+        Requires `fee.collect`. The `Idempotency-Key` header is REQUIRED here (400 `idempotency.key_required`
+        without it): a retry after a lost response must never take the money twice. The amount is split across
+        the family's released challans oldest first (by due date), unless `allocations` names how; either way the
+        parts add up to the amount. A payment above what the family owes is refused with
+        `payments.exceeds_dues` (advance comes later). The payment posts debit Cash in Hand or Bank, credit Fee
+        Receivable, in the same transaction, and gets the next gapless receipt number of the fiscal year
+        (July to June, named by the starting year): `RCP-2026-000001`. One payment is one receipt, with a line per
+        child.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PaymentCreate" }
+      responses:
+        "201":
+          description: The payment and its receipt
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Payment" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/KeyReused" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    get:
+      operationId: listPayments
+      tags: [payments]
+      summary: List payments (cursor paginated, newest first)
+      description: Requires `fee.view`. Voided payments are included; filter with `status`.
+      parameters:
+        - name: family_id
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+        - name: status
+          in: query
+          required: false
+          schema: { $ref: "#/components/schemas/PaymentStatus" }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: cursor
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: A page of payments
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaymentPage" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/payments/{paymentId}:
+    get:
+      operationId: getPayment
+      tags: [payments]
+      summary: One payment with its receipt number and allocations
+      description: Requires `fee.view`.
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: The payment
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Payment" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/payments/{paymentId}/void:
+    post:
+      operationId: voidPayment
+      tags: [payments]
+      summary: Void a payment
+      description: |
+        Requires `payment.void`. Keeps the receipt number (marked voided), posts a reversing journal entry in
+        the same transaction, and reopens the challans it paid (their balances are worked out from the
+        payments that stand). Nothing is deleted (BR-FEE-003). A payment can be voided once.
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PaymentVoid" }
+      responses:
+        "200":
+          description: The voided payment
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Payment" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/families/{familyId}/dues:
+    get:
+      operationId: getFamilyDues
+      tags: [payments]
+      summary: What a family owes now, challan by challan, oldest first
+      description: Requires `fee.view`. Released challans with a balance above zero, in the order a payment would pay them.
+      parameters:
+        - name: familyId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: The family's dues
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FamilyDues" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
 components:
   parameters:
     IdempotencyKey:
@@ -1834,7 +1980,7 @@ components:
 
     Challan:
       type: object
-      required: [id, student_id, family_id, month, due_date, status, new_admission, total, lines, created_at]
+      required: [id, student_id, family_id, month, due_date, status, new_admission, total, paid, balance, lines, created_at]
       properties:
         id: { type: string, format: uuid }
         student_id: { type: string, format: uuid }
@@ -1846,6 +1992,12 @@ components:
           type: boolean
           description: True when this is the month of the student's first enrolment. It marks an exception for the reviewer; it is worked out when the challan is read, not stored.
         total: { $ref: "#/components/schemas/Money" }
+        paid: { $ref: "#/components/schemas/Money" }
+        balance: { $ref: "#/components/schemas/Money" }
+        payment_status:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/PaymentProgress"
         challan_no:
           type: integer
           format: int64
@@ -1942,3 +2094,118 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/StaffMember" }
+
+    PaymentMethod:
+      type: string
+      enum: [cash, bank_transfer, cheque]
+
+    PaymentStatus:
+      type: string
+      enum: [recorded, voided]
+
+    PaymentAccount:
+      type: string
+      description: The account the money is deposited to. 1000 is Cash in Hand, 1100 is Bank.
+      enum: ["1000", "1100"]
+
+    PaymentCreate:
+      type: object
+      required: [family_id, amount, method, account_code]
+      properties:
+        family_id: { type: string, format: uuid }
+        amount: { $ref: "#/components/schemas/Money" }
+        method: { $ref: "#/components/schemas/PaymentMethod" }
+        account_code: { $ref: "#/components/schemas/PaymentAccount" }
+        received_on:
+          type: string
+          format: date
+          description: Defaults to today in Pakistan. Cannot be in the future.
+        reference:
+          type: string
+          maxLength: 100
+          description: A cheque number, bank slip or transfer reference.
+        allocations:
+          type: array
+          description: Optional. How to split the amount across challans; must add up to the amount. Default is oldest first.
+          items: { $ref: "#/components/schemas/AllocationInput" }
+
+    AllocationInput:
+      type: object
+      required: [challan_id, amount]
+      properties:
+        challan_id: { type: string, format: uuid }
+        amount: { $ref: "#/components/schemas/Money" }
+
+    PaymentAllocation:
+      type: object
+      required: [challan_id, student_id, challan_no, amount]
+      properties:
+        challan_id: { type: string, format: uuid }
+        student_id: { type: string, format: uuid }
+        challan_no: { type: integer, format: int64 }
+        amount: { $ref: "#/components/schemas/Money" }
+
+    Payment:
+      type: object
+      required: [id, receipt_no, fiscal_year, family_id, amount, method, account_code, received_on, status, allocations, entry_id, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        receipt_no: { type: string, example: RCP-2026-000001 }
+        fiscal_year: { type: integer, description: The year the July to June fiscal year starts., example: 2026 }
+        family_id: { type: string, format: uuid }
+        amount: { $ref: "#/components/schemas/Money" }
+        method: { $ref: "#/components/schemas/PaymentMethod" }
+        account_code: { $ref: "#/components/schemas/PaymentAccount" }
+        reference: { type: string, nullable: true }
+        received_on: { type: string, format: date }
+        status: { $ref: "#/components/schemas/PaymentStatus" }
+        allocations:
+          type: array
+          items: { $ref: "#/components/schemas/PaymentAllocation" }
+        entry_id: { type: string, format: uuid, description: The journal entry that booked the payment. }
+        void_reason: { type: string, nullable: true }
+        voided_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+
+    PaymentVoid:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 3, maxLength: 200 }
+
+    PaymentPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Payment" }
+        next_cursor: { type: string, nullable: true }
+
+    DueItem:
+      type: object
+      required: [challan_id, student_id, challan_no, month, due_date, total, paid, balance]
+      properties:
+        challan_id: { type: string, format: uuid }
+        student_id: { type: string, format: uuid }
+        challan_no: { type: integer, format: int64 }
+        month: { type: string, format: date }
+        due_date: { type: string, format: date }
+        total: { $ref: "#/components/schemas/Money" }
+        paid: { $ref: "#/components/schemas/Money" }
+        balance: { $ref: "#/components/schemas/Money" }
+
+    FamilyDues:
+      type: object
+      required: [family_id, total_due, items]
+      properties:
+        family_id: { type: string, format: uuid }
+        total_due: { $ref: "#/components/schemas/Money" }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/DueItem" }
+
+    PaymentProgress:
+      type: string
+      description: For a released challan, how much of it has been paid. Null for drafts and voided challans.
+      enum: [unpaid, partial, paid]

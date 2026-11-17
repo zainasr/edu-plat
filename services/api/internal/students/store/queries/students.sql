@@ -108,3 +108,8 @@ SELECT student_id, min(started_on)::date AS first_started_on
 FROM enrolments
 WHERE tenant_id = sqlc.arg('tenant_id') AND student_id = ANY(sqlc.arg('student_ids')::uuid[])
 GROUP BY student_id;
+
+-- name: FamilyExists :one
+SELECT id
+FROM families
+WHERE tenant_id = sqlc.arg('tenant_id') AND id = sqlc.arg('id');

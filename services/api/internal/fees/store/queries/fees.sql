@@ -93,9 +93,12 @@ VALUES (sqlc.arg('tenant_id'), sqlc.arg('challan_id'), sqlc.arg('line_no'), sqlc
 
 -- name: GetChallan :one
 SELECT id, student_id, family_id, month, due_date, status, total, challan_no, consumer_no,
-       released_at, void_reason, created_at
+       released_at, void_reason, created_at,
+       COALESCE((SELECT sum(a.amount) FROM payment_allocations a
+                JOIN payments p ON p.tenant_id = a.tenant_id AND p.id = a.payment_id AND p.status = 'recorded'
+                WHERE a.tenant_id = challans.tenant_id AND a.challan_id = challans.id), 0)::bigint AS paid
 FROM challans
-WHERE tenant_id = sqlc.arg('tenant_id') AND id = sqlc.arg('id');
+WHERE challans.tenant_id = sqlc.arg('tenant_id') AND challans.id = sqlc.arg('id');
 
 -- name: LockChallan :one
 -- Takes the row lock, so two releases of the same challan run one after the other.
@@ -107,15 +110,18 @@ FOR UPDATE;
 -- name: ListChallansPage :many
 -- Keyset pagination on (created_at, id), newest first. A NULL cursor or filter means "no condition".
 SELECT id, student_id, family_id, month, due_date, status, total, challan_no, consumer_no,
-       released_at, void_reason, created_at
+       released_at, void_reason, created_at,
+       COALESCE((SELECT sum(a.amount) FROM payment_allocations a
+                JOIN payments p ON p.tenant_id = a.tenant_id AND p.id = a.payment_id AND p.status = 'recorded'
+                WHERE a.tenant_id = challans.tenant_id AND a.challan_id = challans.id), 0)::bigint AS paid
 FROM challans
-WHERE tenant_id = sqlc.arg('tenant_id')
-  AND (sqlc.narg('month')::date IS NULL OR month = sqlc.narg('month')::date)
-  AND (sqlc.narg('status')::text IS NULL OR status = sqlc.narg('status')::text)
-  AND (sqlc.narg('student_id')::uuid IS NULL OR student_id = sqlc.narg('student_id')::uuid)
+WHERE challans.tenant_id = sqlc.arg('tenant_id')
+  AND (sqlc.narg('month')::date IS NULL OR challans.month = sqlc.narg('month')::date)
+  AND (sqlc.narg('status')::text IS NULL OR challans.status = sqlc.narg('status')::text)
+  AND (sqlc.narg('student_id')::uuid IS NULL OR challans.student_id = sqlc.narg('student_id')::uuid)
   AND (sqlc.narg('after_created_at')::timestamptz IS NULL
-       OR (created_at, id) < (sqlc.narg('after_created_at')::timestamptz, sqlc.narg('after_id')::uuid))
-ORDER BY created_at DESC, id DESC
+       OR (challans.created_at, challans.id) < (sqlc.narg('after_created_at')::timestamptz, sqlc.narg('after_id')::uuid))
+ORDER BY challans.created_at DESC, challans.id DESC
 LIMIT sqlc.arg('page_limit');
 
 -- name: ListChallanLines :many
@@ -144,3 +150,89 @@ SELECT fee_type_id, min(effective_from)::date AS first_from
 FROM fee_plan_lines
 WHERE tenant_id = sqlc.arg('tenant_id') AND class_id = sqlc.arg('class_id')
 GROUP BY fee_type_id;
+
+-- name: ChallanDepositTotal :one
+-- The part of a challan that is a security deposit: a liability, never income (BR-FEE-004).
+SELECT COALESCE(sum(amount) FILTER (WHERE kind = 'security_deposit'), 0)::bigint AS deposit
+FROM challan_lines
+WHERE tenant_id = sqlc.arg('tenant_id') AND challan_id = sqlc.arg('challan_id');
+
+-- ---- payments (slice 5a) --------------------------------------------------------------
+
+-- name: NextReceiptNo :one
+-- Gapless per school and fiscal year: the counter moves inside the payment transaction.
+INSERT INTO tenant_counters (tenant_id, name, value)
+VALUES (sqlc.arg('tenant_id'), sqlc.arg('name'), 1)
+ON CONFLICT (tenant_id, name) DO UPDATE SET value = tenant_counters.value + 1
+RETURNING value;
+
+-- name: LockFamilyChallans :many
+-- Locks every released challan of the family, in id order, before any balance is read, so two cashiers
+-- paying the same family cannot both see the same open balance.
+SELECT id
+FROM challans
+WHERE tenant_id = sqlc.arg('tenant_id') AND family_id = sqlc.arg('family_id') AND status = 'released'
+ORDER BY id
+FOR UPDATE;
+
+-- name: FamilyChallanBalances :many
+-- Released challans of a family with what has been paid on each by payments that stand, in the order a
+-- payment pays them: oldest due date first.
+SELECT challans.id, student_id, due_date, challan_no, month, total,
+       COALESCE((SELECT sum(a.amount) FROM payment_allocations a
+                JOIN payments p ON p.tenant_id = a.tenant_id AND p.id = a.payment_id AND p.status = 'recorded'
+                WHERE a.tenant_id = challans.tenant_id AND a.challan_id = challans.id), 0)::bigint AS paid
+FROM challans
+WHERE challans.tenant_id = sqlc.arg('tenant_id') AND challans.family_id = sqlc.arg('family_id') AND challans.status = 'released'
+  AND (sqlc.narg('only_ids')::uuid[] IS NULL OR challans.id = ANY(sqlc.narg('only_ids')::uuid[]))
+ORDER BY challans.due_date, challans.challan_no, challans.id;
+
+-- name: InsertPayment :exec
+INSERT INTO payments (id, tenant_id, family_id, fiscal_year, receipt_no, amount, method, account_code,
+                      reference, received_on, journal_entry_id, created_by)
+VALUES (sqlc.arg('id'), sqlc.arg('tenant_id'), sqlc.arg('family_id'), sqlc.arg('fiscal_year'), sqlc.arg('receipt_no'),
+        sqlc.arg('amount'), sqlc.arg('method'), sqlc.arg('account_code'), sqlc.narg('reference'),
+        sqlc.arg('received_on'), sqlc.arg('journal_entry_id'), sqlc.arg('created_by'));
+
+-- name: InsertAllocation :exec
+INSERT INTO payment_allocations (tenant_id, payment_id, challan_id, amount)
+VALUES (sqlc.arg('tenant_id'), sqlc.arg('payment_id'), sqlc.arg('challan_id'), sqlc.arg('amount'));
+
+-- name: GetPayment :one
+SELECT id, family_id, fiscal_year, receipt_no, amount, method, account_code, reference, received_on, status,
+       journal_entry_id, void_reason, voided_at, created_at
+FROM payments
+WHERE tenant_id = sqlc.arg('tenant_id') AND id = sqlc.arg('id');
+
+-- name: LockPayment :one
+SELECT id, status, journal_entry_id
+FROM payments
+WHERE tenant_id = sqlc.arg('tenant_id') AND id = sqlc.arg('id')
+FOR UPDATE;
+
+-- name: ListPaymentsPage :many
+-- Keyset pagination on (created_at, id), newest first.
+SELECT id, family_id, fiscal_year, receipt_no, amount, method, account_code, reference, received_on, status,
+       journal_entry_id, void_reason, voided_at, created_at
+FROM payments
+WHERE tenant_id = sqlc.arg('tenant_id')
+  AND (sqlc.narg('family_id')::uuid IS NULL OR family_id = sqlc.narg('family_id')::uuid)
+  AND (sqlc.narg('status')::text IS NULL OR status = sqlc.narg('status')::text)
+  AND (sqlc.narg('after_created_at')::timestamptz IS NULL
+       OR (created_at, id) < (sqlc.narg('after_created_at')::timestamptz, sqlc.narg('after_id')::uuid))
+ORDER BY created_at DESC, id DESC
+LIMIT sqlc.arg('page_limit');
+
+-- name: ListAllocationsForPayments :many
+SELECT a.payment_id, a.challan_id, a.amount, c.student_id, c.challan_no
+FROM payment_allocations a
+JOIN challans c ON c.tenant_id = a.tenant_id AND c.id = a.challan_id
+WHERE a.tenant_id = sqlc.arg('tenant_id') AND a.payment_id = ANY(sqlc.arg('payment_ids')::uuid[])
+ORDER BY a.payment_id, c.challan_no;
+
+-- name: VoidPayment :execrows
+-- Conditional on recorded: with the row lock taken first this runs once per payment.
+UPDATE payments
+SET status = 'voided', void_reason = sqlc.arg('reason'), voided_at = now(), voided_by = sqlc.arg('voided_by'),
+    void_entry_id = sqlc.arg('void_entry_id')
+WHERE tenant_id = sqlc.arg('tenant_id') AND id = sqlc.arg('id') AND status = 'recorded';

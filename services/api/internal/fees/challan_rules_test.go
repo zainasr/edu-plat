@@ -126,7 +126,7 @@ func TestREQ_FEE_006_ConsumerNumber(t *testing.T) {
 
 // BR-FEE-008: release posts a balanced entry, debit Fee Receivable, credit Fee Income.
 func TestBR_FEE_008_ReceivableEntry(t *testing.T) {
-	e := receivableEntry("0f0f0f0f-0f0f-4f0f-8f0f-0f0f0f0f0f0f", 42, 525050, day(2026, time.August, 3))
+	e := receivableEntry("0f0f0f0f-0f0f-4f0f-8f0f-0f0f0f0f0f0f", 42, 525050, 0, day(2026, time.August, 3))
 	if e.SourceType != "challan.released" || e.SourceID == "" || e.Memo == "" {
 		t.Fatalf("header: %+v", e)
 	}

@@ -131,18 +131,28 @@ func luhnValid(s string) bool {
 	return luhnCheckDigit(s[:len(s)-1]) == s[len(s)-1]
 }
 
-// receivableEntry is the journal entry a release posts (BR-FEE-008): the school is now owed the total
-// (debit Fee Receivable) and has earned it (credit Fee Income).
-func receivableEntry(challanID string, challanNo int64, total money.Money, on time.Time) ledger.Entry {
+// accountDepositsHeld is where a security deposit is booked: a liability held for the family, never income
+// (BR-FEE-004).
+const accountDepositsHeld = "2100"
+
+// receivableEntry is the journal entry a release posts (BR-FEE-008): the school is owed the whole total
+// (debit Fee Receivable). The part that is a security deposit is credited to Security Deposits Held, a
+// liability; the rest is earned (credit Fee Income). Owner decision 2026-11-17: the liability is booked
+// when the challan is released, so the schedule and the ledger agree (REQ-FEE-051).
+func receivableEntry(challanID string, challanNo int64, total, deposit money.Money, on time.Time) ledger.Entry {
+	lines := []ledger.Line{{AccountCode: accountFeeReceivable, Debit: total}}
+	if income := total - deposit; income > 0 {
+		lines = append(lines, ledger.Line{AccountCode: accountFeeIncome, Credit: income})
+	}
+	if deposit > 0 {
+		lines = append(lines, ledger.Line{AccountCode: accountDepositsHeld, Credit: deposit})
+	}
 	return ledger.Entry{
 		OccurredOn: on,
 		Memo:       fmt.Sprintf("Challan %d released", challanNo),
 		SourceType: "challan.released",
 		SourceID:   challanID,
-		Lines: []ledger.Line{
-			{AccountCode: accountFeeReceivable, Debit: total},
-			{AccountCode: accountFeeIncome, Credit: total},
-		},
+		Lines:      lines,
 	}
 }
 

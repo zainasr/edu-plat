@@ -288,6 +288,84 @@ func (e MoneyCurrency) Valid() bool {
 	}
 }
 
+// Defines values for PaymentAccount.
+const (
+	N1000 PaymentAccount = "1000"
+	N1100 PaymentAccount = "1100"
+)
+
+// Valid indicates whether the value is a known member of the PaymentAccount enum.
+func (e PaymentAccount) Valid() bool {
+	switch e {
+	case N1000:
+		return true
+	case N1100:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PaymentMethod.
+const (
+	BankTransfer PaymentMethod = "bank_transfer"
+	Cash         PaymentMethod = "cash"
+	Cheque       PaymentMethod = "cheque"
+)
+
+// Valid indicates whether the value is a known member of the PaymentMethod enum.
+func (e PaymentMethod) Valid() bool {
+	switch e {
+	case BankTransfer:
+		return true
+	case Cash:
+		return true
+	case Cheque:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PaymentProgress.
+const (
+	Paid    PaymentProgress = "paid"
+	Partial PaymentProgress = "partial"
+	Unpaid  PaymentProgress = "unpaid"
+)
+
+// Valid indicates whether the value is a known member of the PaymentProgress enum.
+func (e PaymentProgress) Valid() bool {
+	switch e {
+	case Paid:
+		return true
+	case Partial:
+		return true
+	case Unpaid:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PaymentStatus.
+const (
+	Recorded PaymentStatus = "recorded"
+	Voided   PaymentStatus = "voided"
+)
+
+// Valid indicates whether the value is a known member of the PaymentStatus enum.
+func (e PaymentStatus) Valid() bool {
+	switch e {
+	case Recorded:
+		return true
+	case Voided:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for Relationship.
 const (
 	RelationshipAunt        Relationship = "aunt"
@@ -443,8 +521,18 @@ type AcademicSessionList struct {
 	Items []AcademicSession `json:"items"`
 }
 
+// AllocationInput defines model for AllocationInput.
+type AllocationInput struct {
+	// Amount An amount in minor units (paisa). Never a decimal or a float (API conventions §2).
+	Amount    Money              `json:"amount"`
+	ChallanId openapi_types.UUID `json:"challan_id"`
+}
+
 // Challan defines model for Challan.
 type Challan struct {
+	// Balance An amount in minor units (paisa). Never a decimal or a float (API conventions §2).
+	Balance Money `json:"balance"`
+
 	// ChallanNo Gapless, set at release.
 	ChallanNo *int64 `json:"challan_no,omitempty"`
 
@@ -458,10 +546,14 @@ type Challan struct {
 	Month      openapi_types.Date `json:"month"`
 
 	// NewAdmission True when this is the month of the student's first enrolment. It marks an exception for the reviewer; it is worked out when the challan is read, not stored.
-	NewAdmission bool               `json:"new_admission"`
-	ReleasedAt   *time.Time         `json:"released_at,omitempty"`
-	Status       ChallanStatus      `json:"status"`
-	StudentId    openapi_types.UUID `json:"student_id"`
+	NewAdmission bool `json:"new_admission"`
+
+	// Paid An amount in minor units (paisa). Never a decimal or a float (API conventions §2).
+	Paid          Money              `json:"paid"`
+	PaymentStatus *PaymentProgress   `json:"payment_status,omitempty"`
+	ReleasedAt    *time.Time         `json:"released_at,omitempty"`
+	Status        ChallanStatus      `json:"status"`
+	StudentId     openapi_types.UUID `json:"student_id"`
 
 	// Total An amount in minor units (paisa). Never a decimal or a float (API conventions §2).
 	Total      Money   `json:"total"`
@@ -528,6 +620,23 @@ type ClassList struct {
 	Items []Class `json:"items"`
 }
 
+// DueItem defines model for DueItem.
+type DueItem struct {
+	// Balance An amount in minor units (paisa). Never a decimal or a float (API conventions §2).
+	Balance   Money              `json:"balance"`
+	ChallanId openapi_types.UUID `json:"challan_id"`
+	ChallanNo int64              `json:"challan_no"`
+	DueDate   openapi_types.Date `json:"due_date"`
+	Month     openapi_types.Date `json:"month"`
+
+	// Paid An amount in minor units (paisa). Never a decimal or a float (API conventions §2).
+	Paid      Money              `json:"paid"`
+	StudentId openapi_types.UUID `json:"student_id"`
+
+	// Total An amount in minor units (paisa). Never a decimal or a float (API conventions §2).
+	Total Money `json:"total"`
+}
+
 // Enrolment defines model for Enrolment.
 type Enrolment struct {
 	ClassName string              `json:"class_name"`
@@ -574,6 +683,15 @@ type ErrorEnvelope struct {
 		// RequestId Example: 3f1c2a9e0b7d4c11
 		RequestId string `json:"request_id"`
 	} `json:"error"`
+}
+
+// FamilyDues defines model for FamilyDues.
+type FamilyDues struct {
+	FamilyId openapi_types.UUID `json:"family_id"`
+	Items    []DueItem          `json:"items"`
+
+	// TotalDue An amount in minor units (paisa). Never a decimal or a float (API conventions §2).
+	TotalDue Money `json:"total_due"`
 }
 
 // FeeFrequency How often a plan line is charged. Quarterly and term are 1.1 (REQ-FEE-002).
@@ -876,6 +994,88 @@ type OverrideSet struct {
 	FeeTypeId     openapi_types.UUID `json:"fee_type_id"`
 
 	// Reason Example: sibling concession
+	Reason string `json:"reason"`
+}
+
+// Payment defines model for Payment.
+type Payment struct {
+	// AccountCode The account the money is deposited to. 1000 is Cash in Hand, 1100 is Bank.
+	AccountCode PaymentAccount      `json:"account_code"`
+	Allocations []PaymentAllocation `json:"allocations"`
+
+	// Amount An amount in minor units (paisa). Never a decimal or a float (API conventions §2).
+	Amount    Money     `json:"amount"`
+	CreatedAt time.Time `json:"created_at"`
+
+	// EntryId The journal entry that booked the payment.
+	EntryId  openapi_types.UUID `json:"entry_id"`
+	FamilyId openapi_types.UUID `json:"family_id"`
+
+	// FiscalYear The year the July to June fiscal year starts.
+	//
+	// Example: 2026
+	FiscalYear int                `json:"fiscal_year"`
+	Id         openapi_types.UUID `json:"id"`
+	Method     PaymentMethod      `json:"method"`
+
+	// ReceiptNo Example: RCP-2026-000001
+	ReceiptNo  string             `json:"receipt_no"`
+	ReceivedOn openapi_types.Date `json:"received_on"`
+	Reference  *string            `json:"reference,omitempty"`
+	Status     PaymentStatus      `json:"status"`
+	VoidReason *string            `json:"void_reason,omitempty"`
+	VoidedAt   *time.Time         `json:"voided_at,omitempty"`
+}
+
+// PaymentAccount The account the money is deposited to. 1000 is Cash in Hand, 1100 is Bank.
+type PaymentAccount string
+
+// PaymentAllocation defines model for PaymentAllocation.
+type PaymentAllocation struct {
+	// Amount An amount in minor units (paisa). Never a decimal or a float (API conventions §2).
+	Amount    Money              `json:"amount"`
+	ChallanId openapi_types.UUID `json:"challan_id"`
+	ChallanNo int64              `json:"challan_no"`
+	StudentId openapi_types.UUID `json:"student_id"`
+}
+
+// PaymentCreate defines model for PaymentCreate.
+type PaymentCreate struct {
+	// AccountCode The account the money is deposited to. 1000 is Cash in Hand, 1100 is Bank.
+	AccountCode PaymentAccount `json:"account_code"`
+
+	// Allocations Optional. How to split the amount across challans; must add up to the amount. Default is oldest first.
+	Allocations *[]AllocationInput `json:"allocations,omitempty"`
+
+	// Amount An amount in minor units (paisa). Never a decimal or a float (API conventions §2).
+	Amount   Money              `json:"amount"`
+	FamilyId openapi_types.UUID `json:"family_id"`
+	Method   PaymentMethod      `json:"method"`
+
+	// ReceivedOn Defaults to today in Pakistan. Cannot be in the future.
+	ReceivedOn *openapi_types.Date `json:"received_on,omitempty"`
+
+	// Reference A cheque number, bank slip or transfer reference.
+	Reference *string `json:"reference,omitempty"`
+}
+
+// PaymentMethod defines model for PaymentMethod.
+type PaymentMethod string
+
+// PaymentPage defines model for PaymentPage.
+type PaymentPage struct {
+	Items      []Payment `json:"items"`
+	NextCursor *string   `json:"next_cursor,omitempty"`
+}
+
+// PaymentProgress For a released challan, how much of it has been paid. Null for drafts and voided challans.
+type PaymentProgress string
+
+// PaymentStatus defines model for PaymentStatus.
+type PaymentStatus string
+
+// PaymentVoid defines model for PaymentVoid.
+type PaymentVoid struct {
 	Reason string `json:"reason"`
 }
 
@@ -1223,6 +1423,27 @@ type ListJournalEntriesParams struct {
 	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 }
 
+// ListPaymentsParams defines parameters for ListPayments.
+type ListPaymentsParams struct {
+	FamilyId *openapi_types.UUID `form:"family_id,omitempty" json:"family_id,omitempty"`
+	Status   *PaymentStatus      `form:"status,omitempty" json:"status,omitempty"`
+	Limit    *int                `form:"limit,omitempty" json:"limit,omitempty"`
+	Cursor   *string             `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// RecordPaymentParams defines parameters for RecordPayment.
+type RecordPaymentParams struct {
+	// IdempotencyKey A client-chosen unique string (8 to 128 characters: letters, digits, `.`, `_`, `:`, `-`) that makes
+	// a retry safe (REQ-API-010). The key belongs to the user who first sent it, for one endpoint and one
+	// exact request (path, query and body). A repeat of that request returns the original successful
+	// response (header `Idempotent-Replay: true`; only the status, body and Content-Type are replayed)
+	// and does nothing again. The same key with anything different, including another user, is refused
+	// with 422 `idempotency.key_reused`. While the first request is still running a repeat gets 409
+	// `idempotency.in_progress`. Only successful responses (below 400) are remembered, for 24 hours; an
+	// error frees the key so the same request can be retried. Optional for now; payments will require it.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // GetTrialBalanceParams defines parameters for GetTrialBalance.
 type GetTrialBalanceParams struct {
 	// AsOf Include entries dated on or before this day. Defaults to today (Asia/Karachi).
@@ -1314,6 +1535,12 @@ type SetFeePlanLineJSONRequestBody = PlanLineSet
 // CreateFeeTypeJSONRequestBody defines body for CreateFeeType for application/json ContentType.
 type CreateFeeTypeJSONRequestBody = FeeTypeCreate
 
+// RecordPaymentJSONRequestBody defines body for RecordPayment for application/json ContentType.
+type RecordPaymentJSONRequestBody = PaymentCreate
+
+// VoidPaymentJSONRequestBody defines body for VoidPayment for application/json ContentType.
+type VoidPaymentJSONRequestBody = PaymentVoid
+
 // CreateSectionJSONRequestBody defines body for CreateSection for application/json ContentType.
 type CreateSectionJSONRequestBody = SectionCreate
 
@@ -1373,6 +1600,9 @@ type ServerInterface interface {
 	// ArchiveClass Archive a class; it is never deleted
 	// (POST /api/v1/classes/{classId}/archive)
 	ArchiveClass(w http.ResponseWriter, r *http.Request, classId openapi_types.UUID)
+	// GetFamilyDues What a family owes now, challan by challan, oldest first
+	// (GET /api/v1/families/{familyId}/dues)
+	GetFamilyDues(w http.ResponseWriter, r *http.Request, familyId openapi_types.UUID)
 	// GetFeePlan The class plan as it stands in a month
 	// (GET /api/v1/fee-plans/{classId})
 	GetFeePlan(w http.ResponseWriter, r *http.Request, classId openapi_types.UUID, params GetFeePlanParams)
@@ -1397,6 +1627,18 @@ type ServerInterface interface {
 	// GetJournalEntry Read one journal entry with its lines
 	// (GET /api/v1/journal-entries/{entryId})
 	GetJournalEntry(w http.ResponseWriter, r *http.Request, entryId openapi_types.UUID)
+	// ListPayments List payments (cursor paginated, newest first)
+	// (GET /api/v1/payments)
+	ListPayments(w http.ResponseWriter, r *http.Request, params ListPaymentsParams)
+	// RecordPayment Take a payment from a family at the counter
+	// (POST /api/v1/payments)
+	RecordPayment(w http.ResponseWriter, r *http.Request, params RecordPaymentParams)
+	// GetPayment One payment with its receipt number and allocations
+	// (GET /api/v1/payments/{paymentId})
+	GetPayment(w http.ResponseWriter, r *http.Request, paymentId openapi_types.UUID)
+	// VoidPayment Void a payment
+	// (POST /api/v1/payments/{paymentId}/void)
+	VoidPayment(w http.ResponseWriter, r *http.Request, paymentId openapi_types.UUID)
 	// GetTrialBalance Debit and credit totals per account up to a date
 	// (GET /api/v1/reports/trial-balance)
 	GetTrialBalance(w http.ResponseWriter, r *http.Request, params GetTrialBalanceParams)
@@ -1822,6 +2064,32 @@ func (siw *ServerInterfaceWrapper) ArchiveClass(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// GetFamilyDues operation middleware
+func (siw *ServerInterfaceWrapper) GetFamilyDues(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "familyId" -------------
+	var familyId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "familyId", r.PathValue("familyId"), &familyId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "familyId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetFamilyDues(w, r, familyId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetFeePlan operation middleware
 func (siw *ServerInterfaceWrapper) GetFeePlan(w http.ResponseWriter, r *http.Request) {
 
@@ -2033,6 +2301,171 @@ func (siw *ServerInterfaceWrapper) GetJournalEntry(w http.ResponseWriter, r *htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetJournalEntry(w, r, entryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListPayments operation middleware
+func (siw *ServerInterfaceWrapper) ListPayments(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListPaymentsParams
+
+	// ------------- Optional query parameter "family_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "family_id", r.URL.Query(), &params.FamilyId, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "family_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "family_id", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "status" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "status", r.URL.Query(), &params.Status, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "status"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "status", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListPayments(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RecordPayment operation middleware
+func (siw *ServerInterfaceWrapper) RecordPayment(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RecordPaymentParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RecordPayment(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetPayment operation middleware
+func (siw *ServerInterfaceWrapper) GetPayment(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "paymentId" -------------
+	var paymentId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "paymentId", r.PathValue("paymentId"), &paymentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "paymentId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetPayment(w, r, paymentId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// VoidPayment operation middleware
+func (siw *ServerInterfaceWrapper) VoidPayment(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "paymentId" -------------
+	var paymentId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "paymentId", r.PathValue("paymentId"), &paymentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "paymentId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.VoidPayment(w, r, paymentId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2904,6 +3337,11 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/staff/{staffId}/roles/{role}/revoke", wrapper.RevokeRole)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/staff/{staffId}/deactivate", wrapper.DeactivateStaff)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/staff/{staffId}/reactivate", wrapper.ReactivateStaff)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/payments", wrapper.ListPayments)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/payments", wrapper.RecordPayment)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/payments/{paymentId}", wrapper.GetPayment)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/payments/{paymentId}/void", wrapper.VoidPayment)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/families/{familyId}/dues", wrapper.GetFamilyDues)
 
 	return m
 }
@@ -3842,6 +4280,98 @@ func (response ArchiveClass500JSONResponse) VisitArchiveClassResponse(w http.Res
 	return err
 }
 
+type GetFamilyDuesRequestObject struct {
+	FamilyId openapi_types.UUID `json:"familyId"`
+}
+
+type GetFamilyDuesResponseObject interface {
+	VisitGetFamilyDuesResponse(w http.ResponseWriter) error
+}
+
+type GetFamilyDues200JSONResponse FamilyDues
+
+func (response GetFamilyDues200JSONResponse) VisitGetFamilyDuesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetFamilyDues400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response GetFamilyDues400JSONResponse) VisitGetFamilyDuesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetFamilyDues401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response GetFamilyDues401JSONResponse) VisitGetFamilyDuesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetFamilyDues403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetFamilyDues403JSONResponse) VisitGetFamilyDuesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetFamilyDues404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetFamilyDues404JSONResponse) VisitGetFamilyDuesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetFamilyDues500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GetFamilyDues500JSONResponse) VisitGetFamilyDuesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetFeePlanRequestObject struct {
 	ClassId openapi_types.UUID `json:"classId"`
 	Params  GetFeePlanParams
@@ -4498,6 +5028,404 @@ func (response GetJournalEntry404JSONResponse) VisitGetJournalEntryResponse(w ht
 type GetJournalEntry500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response GetJournalEntry500JSONResponse) VisitGetJournalEntryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPaymentsRequestObject struct {
+	Params ListPaymentsParams
+}
+
+type ListPaymentsResponseObject interface {
+	VisitListPaymentsResponse(w http.ResponseWriter) error
+}
+
+type ListPayments200JSONResponse PaymentPage
+
+func (response ListPayments200JSONResponse) VisitListPaymentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPayments400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response ListPayments400JSONResponse) VisitListPaymentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPayments401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ListPayments401JSONResponse) VisitListPaymentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPayments403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListPayments403JSONResponse) VisitListPaymentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPayments500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListPayments500JSONResponse) VisitListPaymentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RecordPaymentRequestObject struct {
+	Params RecordPaymentParams
+	Body   *RecordPaymentJSONRequestBody
+}
+
+type RecordPaymentResponseObject interface {
+	VisitRecordPaymentResponse(w http.ResponseWriter) error
+}
+
+type RecordPayment201JSONResponse Payment
+
+func (response RecordPayment201JSONResponse) VisitRecordPaymentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RecordPayment400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response RecordPayment400JSONResponse) VisitRecordPaymentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RecordPayment401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response RecordPayment401JSONResponse) VisitRecordPaymentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RecordPayment403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response RecordPayment403JSONResponse) VisitRecordPaymentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RecordPayment404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response RecordPayment404JSONResponse) VisitRecordPaymentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RecordPayment409JSONResponse struct{ ConflictJSONResponse }
+
+func (response RecordPayment409JSONResponse) VisitRecordPaymentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RecordPayment422JSONResponse struct{ KeyReusedJSONResponse }
+
+func (response RecordPayment422JSONResponse) VisitRecordPaymentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RecordPayment500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response RecordPayment500JSONResponse) VisitRecordPaymentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPaymentRequestObject struct {
+	PaymentId openapi_types.UUID `json:"paymentId"`
+}
+
+type GetPaymentResponseObject interface {
+	VisitGetPaymentResponse(w http.ResponseWriter) error
+}
+
+type GetPayment200JSONResponse Payment
+
+func (response GetPayment200JSONResponse) VisitGetPaymentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPayment400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response GetPayment400JSONResponse) VisitGetPaymentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPayment401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response GetPayment401JSONResponse) VisitGetPaymentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPayment403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetPayment403JSONResponse) VisitGetPaymentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPayment404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetPayment404JSONResponse) VisitGetPaymentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPayment500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GetPayment500JSONResponse) VisitGetPaymentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type VoidPaymentRequestObject struct {
+	PaymentId openapi_types.UUID `json:"paymentId"`
+	Body      *VoidPaymentJSONRequestBody
+}
+
+type VoidPaymentResponseObject interface {
+	VisitVoidPaymentResponse(w http.ResponseWriter) error
+}
+
+type VoidPayment200JSONResponse Payment
+
+func (response VoidPayment200JSONResponse) VisitVoidPaymentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type VoidPayment400JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response VoidPayment400JSONResponse) VisitVoidPaymentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type VoidPayment401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response VoidPayment401JSONResponse) VisitVoidPaymentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type VoidPayment403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response VoidPayment403JSONResponse) VisitVoidPaymentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type VoidPayment404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response VoidPayment404JSONResponse) VisitVoidPaymentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type VoidPayment409JSONResponse struct{ ConflictJSONResponse }
+
+func (response VoidPayment409JSONResponse) VisitVoidPaymentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type VoidPayment500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response VoidPayment500JSONResponse) VisitVoidPaymentResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -6670,6 +7598,9 @@ type StrictServerInterface interface {
 	// ArchiveClass Archive a class; it is never deleted
 	// (POST /api/v1/classes/{classId}/archive)
 	ArchiveClass(ctx context.Context, request ArchiveClassRequestObject) (ArchiveClassResponseObject, error)
+	// GetFamilyDues What a family owes now, challan by challan, oldest first
+	// (GET /api/v1/families/{familyId}/dues)
+	GetFamilyDues(ctx context.Context, request GetFamilyDuesRequestObject) (GetFamilyDuesResponseObject, error)
 	// GetFeePlan The class plan as it stands in a month
 	// (GET /api/v1/fee-plans/{classId})
 	GetFeePlan(ctx context.Context, request GetFeePlanRequestObject) (GetFeePlanResponseObject, error)
@@ -6694,6 +7625,18 @@ type StrictServerInterface interface {
 	// GetJournalEntry Read one journal entry with its lines
 	// (GET /api/v1/journal-entries/{entryId})
 	GetJournalEntry(ctx context.Context, request GetJournalEntryRequestObject) (GetJournalEntryResponseObject, error)
+	// ListPayments List payments (cursor paginated, newest first)
+	// (GET /api/v1/payments)
+	ListPayments(ctx context.Context, request ListPaymentsRequestObject) (ListPaymentsResponseObject, error)
+	// RecordPayment Take a payment from a family at the counter
+	// (POST /api/v1/payments)
+	RecordPayment(ctx context.Context, request RecordPaymentRequestObject) (RecordPaymentResponseObject, error)
+	// GetPayment One payment with its receipt number and allocations
+	// (GET /api/v1/payments/{paymentId})
+	GetPayment(ctx context.Context, request GetPaymentRequestObject) (GetPaymentResponseObject, error)
+	// VoidPayment Void a payment
+	// (POST /api/v1/payments/{paymentId}/void)
+	VoidPayment(ctx context.Context, request VoidPaymentRequestObject) (VoidPaymentResponseObject, error)
 	// GetTrialBalance Debit and credit totals per account up to a date
 	// (GET /api/v1/reports/trial-balance)
 	GetTrialBalance(ctx context.Context, request GetTrialBalanceRequestObject) (GetTrialBalanceResponseObject, error)
@@ -7129,6 +8072,32 @@ func (sh *strictHandler) ArchiveClass(w http.ResponseWriter, r *http.Request, cl
 	}
 }
 
+// GetFamilyDues operation middleware
+func (sh *strictHandler) GetFamilyDues(w http.ResponseWriter, r *http.Request, familyId openapi_types.UUID) {
+	var request GetFamilyDuesRequestObject
+
+	request.FamilyId = familyId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetFamilyDues(ctx, request.(GetFamilyDuesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetFamilyDues")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetFamilyDuesResponseObject); ok {
+		if err := validResponse.VisitGetFamilyDuesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetFeePlan operation middleware
 func (sh *strictHandler) GetFeePlan(w http.ResponseWriter, r *http.Request, classId openapi_types.UUID, params GetFeePlanParams) {
 	var request GetFeePlanRequestObject
@@ -7341,6 +8310,124 @@ func (sh *strictHandler) GetJournalEntry(w http.ResponseWriter, r *http.Request,
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetJournalEntryResponseObject); ok {
 		if err := validResponse.VisitGetJournalEntryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListPayments operation middleware
+func (sh *strictHandler) ListPayments(w http.ResponseWriter, r *http.Request, params ListPaymentsParams) {
+	var request ListPaymentsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListPayments(ctx, request.(ListPaymentsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListPayments")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListPaymentsResponseObject); ok {
+		if err := validResponse.VisitListPaymentsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RecordPayment operation middleware
+func (sh *strictHandler) RecordPayment(w http.ResponseWriter, r *http.Request, params RecordPaymentParams) {
+	var request RecordPaymentRequestObject
+
+	request.Params = params
+
+	var body RecordPaymentJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RecordPayment(ctx, request.(RecordPaymentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RecordPayment")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RecordPaymentResponseObject); ok {
+		if err := validResponse.VisitRecordPaymentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetPayment operation middleware
+func (sh *strictHandler) GetPayment(w http.ResponseWriter, r *http.Request, paymentId openapi_types.UUID) {
+	var request GetPaymentRequestObject
+
+	request.PaymentId = paymentId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetPayment(ctx, request.(GetPaymentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetPayment")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetPaymentResponseObject); ok {
+		if err := validResponse.VisitGetPaymentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// VoidPayment operation middleware
+func (sh *strictHandler) VoidPayment(w http.ResponseWriter, r *http.Request, paymentId openapi_types.UUID) {
+	var request VoidPaymentRequestObject
+
+	request.PaymentId = paymentId
+
+	var body VoidPaymentJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.VoidPayment(ctx, request.(VoidPaymentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "VoidPayment")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(VoidPaymentResponseObject); ok {
+		if err := validResponse.VisitVoidPaymentResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

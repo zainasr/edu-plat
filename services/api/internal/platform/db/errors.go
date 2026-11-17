@@ -10,7 +10,20 @@ import (
 const (
 	codeUniqueViolation = "23505"
 	codeFKViolation     = "23503"
+	codeCheckViolation  = "23514"
+	codeDeadlock        = "40P01"
+	codeSerialization   = "40001"
 )
+
+// IsCheckViolation reports whether err is Postgres refusing a row or a commit because a CHECK
+// constraint or a constraint trigger said no (for example a payment that over-pays a challan).
+func IsCheckViolation(err error) bool { return hasCode(err, codeCheckViolation) }
+
+// IsRetryable reports whether err is a deadlock or serialization failure: nothing was done, and the
+// same request can safely be tried again.
+func IsRetryable(err error) bool {
+	return hasCode(err, codeDeadlock) || hasCode(err, codeSerialization)
+}
 
 // IsUniqueViolation reports whether err is Postgres refusing a duplicate in a UNIQUE
 // constraint or unique index. Services turn it into a 409 with a code the client can read.

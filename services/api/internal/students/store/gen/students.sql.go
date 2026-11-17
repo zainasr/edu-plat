@@ -64,6 +64,24 @@ func (q *Queries) CloseEnrolment(ctx context.Context, arg CloseEnrolmentParams) 
 	return result.RowsAffected(), nil
 }
 
+const familyExists = `-- name: FamilyExists :one
+SELECT id
+FROM families
+WHERE tenant_id = $1 AND id = $2
+`
+
+type FamilyExistsParams struct {
+	TenantID pgtype.UUID
+	ID       pgtype.UUID
+}
+
+func (q *Queries) FamilyExists(ctx context.Context, arg FamilyExistsParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, familyExists, arg.TenantID, arg.ID)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const firstEnrolmentDates = `-- name: FirstEnrolmentDates :many
 SELECT student_id, min(started_on)::date AS first_started_on
 FROM enrolments
